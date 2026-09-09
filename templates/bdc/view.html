@@ -484,7 +484,7 @@
         {% endif %}
 
         <!-- 4. BON RÉCUPÉRÉ PAR LE TRANSPORTEUR -->
-        {% if not bdc.est_garage and bdc.statut in ['validee', 'livree', 'en_stock', 'en_attente'] %}
+        {% if current_user.can_recuperer and not bdc.est_garage and bdc.statut in ['validee', 'livree', 'en_stock', 'en_attente'] %}
         <button type="button" class="btn btn-purple fw-semibold text-white"
                 style="background-color: #6f42c1 !important; border-color: #6f42c1 !important; color: #ffffff !important;"
                 data-bs-toggle="modal" data-bs-target="#modal-recuperer">
@@ -493,7 +493,7 @@
         {% endif %}
 
         <!-- 5. CLÔTURE -->
-        {% if current_user.role in ['DT', 'DTA'] and bdc.statut in ['recuperee_transporteur', 'en_stock', 'livree'] %}
+        {% if current_user.can_cloturer and bdc.statut in ['recuperee_transporteur', 'en_stock', 'livree'] %}
         <form method="POST" action="{{ url_for('bdc_cloturer', id=bdc.id) }}"
               onsubmit="return confirm('Clôturer ce bon de commande ?')">
           <button type="submit" class="btn btn-secondary fw-semibold w-100">
