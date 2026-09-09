@@ -103,18 +103,20 @@
 
         <!-- Tableau des pièces -->
         <div class="section-block mb-3">
-          <div class="section-block-title text-white bg-navy px-3 py-2 rounded-top">
-            MATÉRIAUX DEMANDÉS
+          <div class="section-block-title text-white bg-navy px-3 py-2 rounded-top d-flex align-items-center justify-content-between">
+            <span><i class="bi bi-tools me-2"></i>MATÉRIAUX DEMANDÉS & POINTAGE</span>
+            <span class="badge bg-light text-navy">{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} pièce(s) reçue(s)</span>
           </div>
           <div class="table-responsive border rounded-bottom">
             <table class="table table-bordered table-bdc mb-0">
               <thead class="table-light">
                 <tr>
-                  <th style="width:50px;" class="text-center">N°</th>
-                  <th>DÉSIGNATION</th>
-                  <th style="width:80px;" class="text-center">QTÉ</th>
-                  <th>OBSERVATIONS</th>
-                  <th class="text-center">RÉCEPTION</th>
+                  <th style="width:40px;" class="text-center">N°</th>
+                  <th>DÉSIGNATION DE LA PIÈCE</th>
+                  <th style="width:70px;" class="text-center">QTÉ</th>
+                  <th style="width:85px;" class="text-center">REÇU</th>
+                  <th>LIVREUR / SOUS-TRAITANT EFFECTIF & NOTES</th>
+                  <th class="text-center" style="width:130px;">ÉTAT RÉCEPTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,13 +125,28 @@
                   <td class="text-center align-middle">{{ loop.index }}</td>
                   <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
                   <td class="text-center align-middle">{{ ligne.quantite }}</td>
-                  <td class="align-middle text-muted">{{ ligne.observations or '' }}</td>
+                  <td class="text-center align-middle fw-bold">
+                    {% if ligne.quantite_recue %}
+                      <span class="text-success">{{ ligne.quantite_recue }}</span>/{{ ligne.quantite }}
+                    {% else %}
+                      <span class="text-muted">0/{{ ligne.quantite }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="align-middle">
+                    {% if ligne.observations %}<div><small class="text-muted">{{ ligne.observations }}</small></div>{% endif %}
+                    {% if ligne.livreur_nom %}
+                      <div class="small text-primary"><i class="bi bi-truck me-1"></i>Livré par : <strong>{{ ligne.livreur_nom }}</strong></div>
+                    {% endif %}
+                    {% if ligne.note_reception %}
+                      <div class="small text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>{{ ligne.note_reception }}</div>
+                    {% endif %}
+                  </td>
                   <td class="text-center align-middle">
                     <span class="badge bg-{{ ligne.statut_reception_couleur }}">
                       {{ ligne.statut_reception_label }}
                     </span>
-                    {% if ligne.quantite_recue and ligne.statut_reception == 'partiel' %}
-                    <div class="small text-muted">{{ ligne.quantite_recue }}/{{ ligne.quantite }}</div>
+                    {% if ligne.date_reception %}
+                    <div class="text-muted" style="font-size:0.7rem;">{{ ligne.date_reception.strftime('%d/%m/%Y %H:%M') }}</div>
                     {% endif %}
                   </td>
                 </tr>
@@ -156,15 +173,15 @@
           <div class="col-6">
             <div class="sign-box text-center p-3 border rounded">
               {% if bdc.est_garage %}
-              <div class="fw-bold text-navy mb-2">DEMANDEUR / ATELIER</div>
-              <div class="text-muted small">Signature & Date</div>
+              <div class="fw-bold text-navy mb-2">FOURNISSEUR</div>
+              <div class="text-muted small">Signature</div>
               {% else %}
               <div class="fw-bold text-navy mb-2">TRANSPORTEUR / CHAUFFEUR</div>
               <div class="text-muted small">Signature</div>
               {% endif %}
               <div class="sign-space mt-3 border-bottom mx-4"></div>
               <div class="mt-2 small text-muted">
-                {{ bdc.demandeur_nom if bdc.est_garage else (bdc.transporteur or '—') }}
+                {{ 'Fournisseur externe' if bdc.est_garage else (bdc.transporteur or '—') }}
               </div>
             </div>
           </div>
@@ -234,8 +251,8 @@
           <form method="POST" action="{{ url_for('bdc_reception', id=bdc.id) }}"
                 class="row g-2 align-items-end">
             <input type="hidden" name="ligne_id" value="{{ ligne.id }}">
-            <div class="col-md-3">
-              <label class="form-label small fw-semibold">Statut réception</label>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Statut</label>
               <select name="statut_reception" class="form-select form-select-sm">
                 <option value="non_recu" {% if ligne.statut_reception == 'non_recu' %}selected{% endif %}>Non reçu</option>
                 <option value="recu" {% if ligne.statut_reception == 'recu' %}selected{% endif %}>Reçu</option>
@@ -247,15 +264,21 @@
               <input type="number" name="quantite_recue" class="form-control form-control-sm"
                      value="{{ ligne.quantite_recue or 0 }}" min="0" max="{{ ligne.quantite }}">
             </div>
-            <div class="col-md-5">
-              <label class="form-label small fw-semibold">Note / Observation</label>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Fournisseur / Livreur réel</label>
+              <input type="text" name="livreur_nom" class="form-control form-control-sm"
+                     value="{{ ligne.livreur_nom or bdc.fournisseur or '' }}"
+                     placeholder="ex: CFAO, Tractafric, tiers...">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Note / N° BL / Remarque</label>
               <input type="text" name="note_reception" class="form-control form-control-sm"
                      value="{{ ligne.note_reception or '' }}"
-                     placeholder="Remarque...">
+                     placeholder="N° BL ou détails...">
             </div>
             <div class="col-md-2">
               <button type="submit" class="btn btn-sm btn-primary-navy w-100">
-                <i class="bi bi-check2"></i> Enregistrer
+                <i class="bi bi-check2"></i> Valider
               </button>
             </div>
           </form>
@@ -321,11 +344,34 @@
       </div>
       <div class="card-body d-grid gap-2">
 
-        <!-- Imprimer PDF -->
-        <a href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank"
-           class="btn btn-outline-danger fw-semibold">
-          <i class="bi bi-file-pdf me-2"></i>Imprimer / Télécharger PDF
-        </a>
+        <!-- Options d'impression PDF -->
+        <div class="dropdown d-grid">
+          <button class="btn btn-outline-danger dropdown-toggle fw-semibold text-start d-flex align-items-center justify-content-between"
+                  type="button" data-bs-toggle="dropdown">
+            <span><i class="bi bi-file-pdf me-2 text-danger"></i>Imprimer / PDF</span>
+          </button>
+          <ul class="dropdown-menu shadow w-100 p-2">
+            <li>
+              <a class="dropdown-item py-2 rounded" href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank">
+                <i class="bi bi-file-earmark-text text-danger me-2"></i>
+                <div>
+                  <strong>Bon de commande standard</strong>
+                  <div class="small text-muted">Format officiel épuré original</div>
+                </div>
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item py-2 rounded" href="{{ url_for('bdc_pdf', id=bdc.id, avec_reception=1) }}" target="_blank">
+                <i class="bi bi-card-checklist text-primary me-2"></i>
+                <div>
+                  <strong>Bon avec état de réception</strong>
+                  <div class="small text-muted">Affiche les pièces livrées / non livrées</div>
+                </div>
+              </a>
+            </li>
+          </ul>
+        </div>
 
         <!-- 1. VALIDATION DT (si en attente) -->
         {% if peut_valider and bdc.statut == 'en_attente' %}
