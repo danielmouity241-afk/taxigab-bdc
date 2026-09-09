@@ -65,13 +65,14 @@
       <table class="table table-bordered mb-0">
         <thead class="table-light">
           <tr>
-            <th style="width:50px;" class="text-center">N°</th>
+            <th style="width:40px;" class="text-center">N°</th>
             <th>Désignation</th>
-            <th class="text-center" style="width:80px;">Qté cmd.</th>
-            <th class="text-center" style="width:80px;">Qté reçue</th>
-            <th class="text-center" style="width:120px;">Statut réception</th>
+            <th class="text-center" style="width:70px;">Qté cmd.</th>
+            <th class="text-center" style="width:70px;">Reçu</th>
+            <th style="width:180px;">Livreur / Sous-traitant</th>
+            <th class="text-center" style="width:110px;">Statut</th>
             <th>Note</th>
-            <th class="text-center" style="width:120px;">Date réception</th>
+            <th class="text-center" style="width:110px;">Date réception</th>
           </tr>
         </thead>
         <tbody>
@@ -80,8 +81,15 @@
             <td class="text-center align-middle">{{ loop.index }}</td>
             <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
             <td class="text-center align-middle">{{ ligne.quantite }}</td>
-            <td class="text-center align-middle">
-              {% if ligne.quantite_recue %}{{ ligne.quantite_recue }}{% else %}—{% endif %}
+            <td class="text-center align-middle fw-bold">
+              {% if ligne.quantite_recue %}{{ ligne.quantite_recue }}{% else %}0{% endif %}
+            </td>
+            <td class="align-middle small">
+              {% if ligne.livreur_nom %}
+                <span class="text-primary fw-semibold"><i class="bi bi-truck me-1"></i>{{ ligne.livreur_nom }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
             </td>
             <td class="text-center align-middle">
               <span class="badge bg-{{ ligne.statut_reception_couleur }}">
