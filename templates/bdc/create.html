@@ -254,6 +254,13 @@ function supprimerLigne(btn) {
   renuméroter();
 }
 
+function renuméroter() {
+  document.querySelectorAll('.ligne-piece').forEach((tr, index) => {
+    const numEl = tr.querySelector('.ligne-num');
+    if (numEl) numEl.textContent = index + 1;
+  });
+}
+
 function toggleTypeBon(type) {
   const sectionVehicule = document.getElementById('section-vehicule');
   const sectionGarageInfo = document.getElementById('section-garage-info');
