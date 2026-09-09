@@ -234,22 +234,31 @@ body {
 
 /* Bouton et badge VIOLET (Récupéré par transporteur) */
 .btn-purple {
-  background-color: #6f42c1 !important;
-  border-color: #6f42c1 !important;
+  background-color: #7c3aed !important;
+  border-color: #7c3aed !important;
   color: #ffffff !important;
 }
 .btn-purple:hover, .btn-purple:focus, .btn-purple:active {
-  background-color: #59359a !important;
-  border-color: #4e2d86 !important;
+  background-color: #6d28d9 !important;
+  border-color: #5b21b6 !important;
   color: #ffffff !important;
 }
 .bg-purple {
-  background-color: #6f42c1 !important;
+  background-color: #7c3aed !important;
   color: #ffffff !important;
 }
 .badge.bg-purple {
-  background-color: #6f42c1 !important;
+  background-color: #7c3aed !important;
   color: #ffffff !important;
+}
+.bg-purple-soft {
+  background-color: #f3e8ff !important;
+}
+.text-purple {
+  color: #7c3aed !important;
+}
+.border-purple {
+  border-color: #c4b5fd !important;
 }
 
 
