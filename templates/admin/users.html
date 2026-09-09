@@ -19,24 +19,58 @@
           <tr>
             <th>Nom complet</th>
             <th>Identifiant</th>
-            <th>Rôle</th>
+            <th>Rôle (Fonction)</th>
+            <th>Autorisations & Droits</th>
             <th>Statut</th>
-            <th>Date création</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for user in users %}
-          <tr class="{% if not user.actif %}text-muted{% endif %}">
+          <tr class="{% if not user.actif %}text-muted table-light{% endif %} align-middle">
             <td>
               <div class="d-flex align-items-center gap-2">
                 <div class="avatar-circle avatar-sm">{{ user.nom_complet[0] }}</div>
-                <div class="fw-semibold">{{ user.nom_complet }}</div>
+                <div>
+                  <div class="fw-semibold text-navy">{{ user.nom_complet }}</div>
+                  <div class="text-muted small">Créé le {{ user.date_creation.strftime('%d/%m/%Y') }}</div>
+                </div>
               </div>
             </td>
             <td><code>{{ user.username }}</code></td>
             <td>
-              <span class="badge badge-{{ user.role }}">{{ user.role_label }}</span>
+              <span class="badge bg-navy-soft text-navy fs-7 px-2 py-1">{{ user.role_label }}</span>
+            </td>
+            <td>
+              {% if user.est_spectateur %}
+                <span class="badge bg-info text-dark">
+                  <i class="bi bi-eye-fill me-1"></i>Spectateur (Consultation & Impression)
+                </span>
+              {% else %}
+                <div class="d-flex flex-wrap gap-1" style="max-width: 320px;">
+                  {% if user.peut_creer_bdc or user.role in ['DT', 'DTA', 'magasinier'] %}
+                    <span class="badge bg-primary-soft text-primary border" title="Peut créer un bon">Création</span>
+                  {% endif %}
+                  {% if user.peut_valider_dt or user.role == 'DT' %}
+                    <span class="badge bg-success-soft text-success border" title="Peut valider ou refuser">Validation DT</span>
+                  {% endif %}
+                  {% if user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier'] %}
+                    <span class="badge bg-warning-soft text-dark border" title="Peut pointer et gérer les réceptions">Stock / Réception</span>
+                  {% endif %}
+                  {% if user.peut_recuperer or user.role in ['DT', 'DTA', 'magasinier', 'transporteur'] %}
+                    <span class="badge bg-purple-soft text-purple border" title="Peut valider récupération transporteur">Transporteur</span>
+                  {% endif %}
+                  {% if user.peut_cloturer or user.role in ['DT', 'DTA'] %}
+                    <span class="badge bg-secondary-soft text-secondary border" title="Peut clôturer un bon">Clôture</span>
+                  {% endif %}
+                  {% if user.peut_annuler or user.role in ['DT', 'DTA'] %}
+                    <span class="badge bg-danger-soft text-danger border" title="Peut annuler">Annulation</span>
+                  {% endif %}
+                  {% if user.peut_gerer_utilisateurs or user.role == 'DT' %}
+                    <span class="badge bg-dark text-white border" title="Administrateur des comptes">Admin</span>
+                  {% endif %}
+                </div>
+              {% endif %}
             </td>
             <td>
               {% if user.actif %}
@@ -45,7 +79,6 @@
                 <span class="badge bg-secondary">Désactivé</span>
               {% endif %}
             </td>
-            <td class="text-muted small">{{ user.date_creation.strftime('%d/%m/%Y') }}</td>
             <td>
               <div class="d-flex gap-1">
                 <a href="{{ url_for('admin_user_edit', id=user.id) }}"
