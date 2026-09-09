@@ -46,7 +46,7 @@
           <i class="bi bi-speedometer2 me-2"></i> Tableau de bord
         </a>
       </li>
-      {% if current_user.role in ['DT', 'DTA', 'magasinier'] %}
+      {% if current_user.can_creer_bdc %}
       <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'bdc_create' %}active{% endif %}"
            href="{{ url_for('bdc_create') }}">
@@ -60,7 +60,7 @@
           <i class="bi bi-list-ul me-2"></i> Bons de commande
         </a>
       </li>
-      {% if current_user.role in ['DT', 'DTA', 'magasinier'] %}
+      {% if current_user.can_gerer_stock or current_user.est_spectateur %}
       <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'suivi' %}active{% endif %}"
            href="{{ url_for('suivi') }}">
@@ -80,7 +80,7 @@
         </a>
       </li>
       {% endif %}
-      {% if current_user.role == 'DT' %}
+      {% if current_user.can_gerer_utilisateurs %}
       <li class="nav-item mt-2">
         <div class="nav-section-label">ADMINISTRATION</div>
       </li>
