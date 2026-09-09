@@ -43,20 +43,24 @@ def test_workflow():
         bdc1 = BonDeCommande.query.order_by(BonDeCommande.id.asc()).first()
         assert bdc1 is not None
         assert bdc1.numero == 1
-        assert bdc1.numero_affiche == '0001'
+        assert bdc1.numero_affiche.startswith('BDC-')
+        assert bdc1.numero_affiche.endswith('-00001')
         assert bdc1.est_garage is True
         assert bdc1.transporteur in (None, '')
         print(f"   [OK] Bon N°{bdc1.numero_affiche} enregistré comme Bon Garage (est_garage={bdc1.est_garage})")
         bdc1_id = bdc1.id
 
-    print("3. Test du PDF pour le Bon Garage N°0001...")
+    print("3. Test du PDF standard et réception pour le Bon Garage...")
     res = client.get(f'/bdc/{bdc1_id}/pdf')
     assert res.status_code == 200
     assert res.mimetype == 'application/pdf'
     assert len(res.data) > 1000
-    print(f"   [OK] PDF N°0001 généré avec succès ({len(res.data)} octets)")
+    res_rec = client.get(f'/bdc/{bdc1_id}/pdf?avec_reception=1')
+    assert res_rec.status_code == 200
+    assert res_rec.mimetype == 'application/pdf'
+    print(f"   [OK] PDFs Standard et Réception générés avec succès")
 
-    print("4. Test de création du Bon N°0002 pour un VÉHICULE...")
+    print("4. Test de création du Bon N°00002 pour un VÉHICULE...")
     data_vehicule = {
         'type_bon': 'vehicule',
         'demandeur_nom': 'Daniel MOUITY',
@@ -77,7 +81,8 @@ def test_workflow():
     with app.app_context():
         bdc2 = BonDeCommande.query.filter_by(numero=2).first()
         assert bdc2 is not None
-        assert bdc2.numero_affiche == '0002'
+        assert bdc2.numero_affiche.startswith('BDC-')
+        assert bdc2.numero_affiche.endswith('-00002')
         assert bdc2.est_garage is False
         assert bdc2.vehicule_nom == 'TG 433'
         assert bdc2.transporteur == 'Transport Express Gabon'
@@ -86,9 +91,9 @@ def test_workflow():
     print("5. Test de la liste des bons et du tableau de bord...")
     res = client.get('/bdc')
     assert res.status_code == 200
-    assert b'0001' in res.data
-    assert b'0002' in res.data
-    print("   [OK] Affichage 0001 et 0002 validé dans la liste")
+    assert b'00001' in res.data
+    assert b'00002' in res.data
+    print("   [OK] Affichage 00001 et 00002 validé dans la liste")
 
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
