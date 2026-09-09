@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Historique — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-clock-history me-2"></i>Historique & traçabilité{% endblock %}
+
+{% block content %}
+
+<!-- ── FILTRES ────────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom py-3">
+    <button class="btn btn-sm btn-outline-secondary w-100 text-start" data-bs-toggle="collapse"
+            data-bs-target="#filtres-hist">
+      <i class="bi bi-funnel me-2"></i><strong>Filtrer l'historique</strong>
+    </button>
+  </div>
+  <div class="collapse show" id="filtres-hist">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('historique') }}">
+        <div class="row g-3">
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">N° BON</label>
+            <input type="number" name="numero" class="form-control form-control-sm"
+                   placeholder="ex: 752" value="{{ filtres.numero }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Type d'action</label>
+            <select name="action" class="form-select form-select-sm">
+              <option value="">Toutes les actions</option>
+              {% for t in types_actions %}
+              <option value="{{ t }}" {% if filtres.action == t %}selected{% endif %}>
+                {{ t|replace('_', ' ')|capitalize }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Utilisateur</label>
+            <input type="text" name="user" class="form-control form-control-sm"
+                   placeholder="Nom de l'utilisateur" value="{{ filtres.user }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Date début</label>
+            <input type="date" name="date_debut" class="form-control form-control-sm"
+                   value="{{ filtres.date_debut }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Date fin</label>
+            <input type="date" name="date_fin" class="form-control form-control-sm"
+                   value="{{ filtres.date_fin }}">
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary-navy btn-sm">
+              <i class="bi bi-search me-1"></i> Rechercher
+            </button>
+            <a href="{{ url_for('historique') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-x-circle me-1"></i> Réinitialiser
+            </a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── RÉSULTATS ───────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-list-check me-2"></i>
+      {{ actions|length }} action(s) enregistrée(s)
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    {% if actions %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bdc mb-0">
+        <thead>
+          <tr>
+            <th style="width:160px;">Date & Heure</th>
+            <th style="width:100px;">N° BON</th>
+            <th>Action</th>
+            <th>Utilisateur</th>
+            <th>Statut</th>
+            <th>Détails</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for action in actions %}
+          <tr>
+            <td class="small text-muted">
+              <i class="bi bi-calendar3 me-1"></i>{{ action.timestamp.strftime('%d/%m/%Y') }}<br>
+              <i class="bi bi-clock me-1"></i>{{ action.timestamp.strftime('%H:%M:%S') }}
+            </td>
+            <td>
+              <a href="{{ url_for('bdc_view', id=action.bdc_id) }}"
+                 class="bdc-numero">{{ action.bon.numero }}</a>
+            </td>
+            <td>
+              <span>
+                <i class="bi {{ action.icone }} me-1"></i>
+                {{ action.type_action_label }}
+              </span>
+            </td>
+            <td>
+              {% if action.acteur %}
+                <div class="fw-semibold">{{ action.acteur.nom_complet }}</div>
+                <div class="text-muted small">{{ action.acteur.role_label }}</div>
+              {% else %}
+                <span class="text-muted small">Système</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if action.ancien_statut %}
+                <span class="badge bg-secondary small">{{ action.ancien_statut }}</span>
+                <i class="bi bi-arrow-right mx-1 small"></i>
+              {% endif %}
+              {% if action.nouveau_statut %}
+                <span class="badge bg-primary small">{{ action.nouveau_statut }}</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ action.details or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-clock-history fs-1 d-block mb-3"></i>
+      <p>Aucune action ne correspond aux critères sélectionnés.</p>
+      <a href="{{ url_for('historique') }}" class="btn btn-sm btn-outline-secondary">
+        Effacer les filtres
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
