@@ -35,15 +35,6 @@ def create_app():
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
-    @app.context_processor
-    def inject_globals():
-        return {
-            'STATUTS_BDC': STATUTS_BDC,
-            'STATUTS_COULEURS': STATUTS_COULEURS,
-            'now': datetime.now(),
-            'company_name': Config.COMPANY_NAME,
-        }
-
     # ─── HELPERS ──────────────────────────────────────────────────────────
     def get_next_numero():
         """Retourne le prochain numéro de BDC réinitialisé à 1 chaque début de mois."""
@@ -72,18 +63,50 @@ def create_app():
         db.session.add(action)
 
     def peut_valider_dt(user):
-        return user.role == 'DT'
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'peut_valider_dt', False) or user.role == 'DT')
 
     def peut_creer_bdc(user):
-        return user.role in ('DT', 'DTA', 'magasinier')
-
-    def peut_annuler(user, bdc):
-        if bdc.statut in ('cloturee', 'annulee'):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
             return False
-        return user.role in ('DT', 'DTA')
+        return bool(getattr(user, 'peut_creer_bdc', False) or user.role in ('DT', 'DTA', 'magasinier'))
+
+    def peut_annuler(user, bdc=None):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        if bdc and getattr(bdc, 'statut', None) in ('cloturee', 'annulee'):
+            return False
+        return bool(getattr(user, 'peut_annuler', False) or user.role in ('DT', 'DTA'))
 
     def peut_gerer_stock(user):
-        return user.role in ('DT', 'DTA', 'magasinier')
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'peut_gerer_stock', False) or user.role in ('DT', 'DTA', 'magasinier'))
+
+    def peut_cloturer(user):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'peut_cloturer', False) or user.role in ('DT', 'DTA'))
+
+    def peut_recuperer(user):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'peut_recuperer', False) or user.role in ('DT', 'DTA', 'magasinier', 'transporteur'))
+
+    def peut_gerer_utilisateurs(user):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'peut_gerer_utilisateurs', False) or user.role == 'DT')
+
+    @app.context_processor
+    def inject_globals():
+        return {
+            'STATUTS_BDC': STATUTS_BDC,
+            'STATUTS_COULEURS': STATUTS_COULEURS,
+            'now': datetime.now(),
+            'company_name': Config.COMPANY_NAME,
+        }
 
     # ─── AUTHENTIFICATION ─────────────────────────────────────────────────
     @app.route('/')
@@ -228,8 +251,7 @@ def create_app():
     @login_required
     def bdc_create():
         if not peut_creer_bdc(current_user):
-            flash('Vous n\'avez pas les droits pour créer un bon de commande.', 'danger')
-            return redirect(url_for('dashboard'))
+            abort(403)
 
         if request.method == 'POST':
             type_bon        = request.form.get('type_bon', 'vehicule').strip()
@@ -722,7 +744,7 @@ def create_app():
     @app.route('/admin/utilisateurs')
     @login_required
     def admin_users():
-        if current_user.role != 'DT':
+        if not peut_gerer_utilisateurs(current_user):
             abort(403)
         users = User.query.order_by(User.nom_complet).all()
         return render_template('admin/users.html', users=users)
@@ -730,7 +752,7 @@ def create_app():
     @app.route('/admin/utilisateurs/nouveau', methods=['GET', 'POST'])
     @login_required
     def admin_user_create():
-        if current_user.role != 'DT':
+        if not peut_gerer_utilisateurs(current_user):
             abort(403)
         if request.method == 'POST':
             username    = request.form.get('username', '').strip()
@@ -741,46 +763,62 @@ def create_app():
             if User.query.filter_by(username=username).first():
                 flash('Cet identifiant existe déjà.', 'danger')
             elif not all([username, password, nom_complet, role]):
-                flash('Tous les champs sont obligatoires.', 'danger')
+                flash('Tous les champs obligatoires doivent être renseignés.', 'danger')
             else:
                 u = User(username=username, nom_complet=nom_complet, role=role)
                 u.set_password(password)
+                u.est_spectateur          = request.form.get('est_spectateur') == 'on'
+                u.peut_creer_bdc          = request.form.get('peut_creer_bdc') == 'on'
+                u.peut_valider_dt         = request.form.get('peut_valider_dt') == 'on'
+                u.peut_gerer_stock        = request.form.get('peut_gerer_stock') == 'on'
+                u.peut_recuperer          = request.form.get('peut_recuperer') == 'on'
+                u.peut_cloturer           = request.form.get('peut_cloturer') == 'on'
+                u.peut_annuler            = request.form.get('peut_annuler') == 'on'
+                u.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
                 db.session.add(u)
                 db.session.commit()
-                flash(f'Utilisateur {nom_complet} créé avec succès.', 'success')
+                flash(f'Utilisateur {nom_complet} ({role}) créé avec succès.', 'success')
                 return redirect(url_for('admin_users'))
         return render_template('admin/user_form.html', user=None)
 
     @app.route('/admin/utilisateurs/<int:id>/modifier', methods=['GET', 'POST'])
     @login_required
     def admin_user_edit(id):
-        if current_user.role != 'DT':
+        if not peut_gerer_utilisateurs(current_user):
             abort(403)
         user = db.session.get(User, id)
         if not user:
             abort(404)
         if request.method == 'POST':
-            user.nom_complet = request.form.get('nom_complet', '').strip()
-            user.role        = request.form.get('role', '').strip()
-            user.actif       = request.form.get('actif') == 'on'
+            user.nom_complet             = request.form.get('nom_complet', '').strip()
+            user.role                    = request.form.get('role', '').strip()
+            user.actif                   = request.form.get('actif') == 'on'
+            user.est_spectateur          = request.form.get('est_spectateur') == 'on'
+            user.peut_creer_bdc          = request.form.get('peut_creer_bdc') == 'on'
+            user.peut_valider_dt         = request.form.get('peut_valider_dt') == 'on'
+            user.peut_gerer_stock        = request.form.get('peut_gerer_stock') == 'on'
+            user.peut_recuperer          = request.form.get('peut_recuperer') == 'on'
+            user.peut_cloturer           = request.form.get('peut_cloturer') == 'on'
+            user.peut_annuler            = request.form.get('peut_annuler') == 'on'
+            user.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
             new_pw = request.form.get('password', '').strip()
             if new_pw:
                 user.set_password(new_pw)
             db.session.commit()
-            flash(f'Utilisateur {user.nom_complet} mis à jour.', 'success')
+            flash(f'Utilisateur {user.nom_complet} mis à jour avec succès.', 'success')
             return redirect(url_for('admin_users'))
         return render_template('admin/user_form.html', user=user)
 
     @app.route('/admin/utilisateurs/<int:id>/supprimer', methods=['POST'])
     @login_required
     def admin_user_delete(id):
-        if current_user.role != 'DT':
+        if not peut_gerer_utilisateurs(current_user):
             abort(403)
         user = db.session.get(User, id)
         if not user:
             abort(404)
         if user.id == current_user.id:
-            flash('Vous ne pouvez pas supprimer votre propre compte.', 'danger')
+            flash('Vous ne pouvez pas désactiver votre propre compte.', 'danger')
             return redirect(url_for('admin_users'))
         user.actif = False
         db.session.commit()
@@ -791,22 +829,42 @@ def create_app():
     with app.app_context():
         try:
             db.create_all()
-            # Migration automatique si la colonne livreur_nom n'existe pas encore
             from sqlalchemy import text
+            # Migration automatique si la colonne livreur_nom n'existe pas encore
             try:
                 db.session.execute(text("ALTER TABLE lignes_bdc ADD COLUMN livreur_nom VARCHAR(128)"))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
 
+            # Migration automatique des colonnes de permissions sur users
+            colonnes_permissions = [
+                ("peut_creer_bdc", "BOOLEAN DEFAULT 0"),
+                ("peut_valider_dt", "BOOLEAN DEFAULT 0"),
+                ("peut_gerer_stock", "BOOLEAN DEFAULT 0"),
+                ("peut_recuperer", "BOOLEAN DEFAULT 0"),
+                ("peut_cloturer", "BOOLEAN DEFAULT 0"),
+                ("peut_annuler", "BOOLEAN DEFAULT 0"),
+                ("peut_gerer_utilisateurs", "BOOLEAN DEFAULT 0"),
+                ("est_spectateur", "BOOLEAN DEFAULT 0"),
+            ]
+            for col_nom, col_type in colonnes_permissions:
+                try:
+                    db.session.execute(text(f"ALTER TABLE users ADD COLUMN {col_nom} {col_type}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+            # Comptes par défaut
             default_users = [
-                {'username': 'dt',          'password': 'DT@2026!',     'nom': 'Directeur Technique',         'role': 'DT'},
-                {'username': 'dta',         'password': 'DTA@2026!',    'nom': 'Directeur Technique Adjoint', 'role': 'DTA'},
-                {'username': 'magasinier',  'password': 'Mag@2026!',    'nom': 'Magasinier Principal',        'role': 'magasinier'},
-                {'username': 'transporteur','password': 'Trans@2026!',  'nom': 'Transporteur',                'role': 'transporteur'},
+                {'username': 'dt',          'password': 'DT@2026!',     'nom': 'Directeur Technique',         'role': 'Directeur Technique',        'admin': True},
+                {'username': 'dta',         'password': 'DTA@2026!',    'nom': 'Directeur Technique Adjoint', 'role': 'Directeur Technique Adjoint', 'dta': True},
+                {'username': 'magasinier',  'password': 'Mag@2026!',    'nom': 'Magasinier Principal',        'role': 'Magasinier',                 'mag': True},
+                {'username': 'transporteur','password': 'Trans@2026!',  'nom': 'Transporteur',                'role': 'Transporteur',               'trans': True},
             ]
             for u_data in default_users:
-                if not User.query.filter_by(username=u_data['username']).first():
+                u = User.query.filter_by(username=u_data['username']).first()
+                if not u:
                     u = User(
                         username=u_data['username'],
                         nom_complet=u_data['nom'],
@@ -814,7 +872,25 @@ def create_app():
                     )
                     u.set_password(u_data['password'])
                     db.session.add(u)
-            db.session.commit()
+                if u_data.get('admin'):
+                    u.peut_gerer_utilisateurs = True
+                    u.peut_valider_dt = True
+                    u.peut_creer_bdc = True
+                    u.peut_gerer_stock = True
+                    u.peut_cloturer = True
+                    u.peut_annuler = True
+                    u.peut_recuperer = True
+                elif u_data.get('dta'):
+                    u.peut_creer_bdc = True
+                    u.peut_annuler = True
+                    u.peut_gerer_stock = True
+                    u.peut_recuperer = True
+                elif u_data.get('mag'):
+                    u.peut_creer_bdc = True
+                    u.peut_gerer_stock = True
+                elif u_data.get('trans'):
+                    u.peut_recuperer = True
+
         except Exception as e:
             print("Erreur initialisation DB auto:", e)
 
