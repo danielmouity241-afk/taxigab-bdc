@@ -14,9 +14,19 @@ class User(UserMixin, db.Model):
     username       = db.Column(db.String(64), unique=True, nullable=False)
     password_hash  = db.Column(db.String(256), nullable=False)
     nom_complet    = db.Column(db.String(128), nullable=False)
-    role           = db.Column(db.String(32), nullable=False)  # DT / DTA / magasinier / transporteur
+    role           = db.Column(db.String(128), nullable=False)  # Titre libre manuel (ex: Président Directeur Général, Magasinier...)
     actif          = db.Column(db.Boolean, default=True)
     date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Permissions granulaires personnalisables
+    peut_creer_bdc           = db.Column(db.Boolean, default=False)
+    peut_valider_dt          = db.Column(db.Boolean, default=False)
+    peut_gerer_stock         = db.Column(db.Boolean, default=False)
+    peut_recuperer           = db.Column(db.Boolean, default=False)
+    peut_cloturer            = db.Column(db.Boolean, default=False)
+    peut_annuler             = db.Column(db.Boolean, default=False)
+    peut_gerer_utilisateurs  = db.Column(db.Boolean, default=False)
+    est_spectateur           = db.Column(db.Boolean, default=False)  # Consultation totale et impression sans modification
 
     # Relations
     bons_crees    = db.relationship('BonDeCommande', foreign_keys='BonDeCommande.createur_id', backref='createur', lazy=True)
@@ -36,8 +46,53 @@ class User(UserMixin, db.Model):
             'DTA': 'Dir. Technique Adjoint',
             'magasinier': 'Magasinier',
             'transporteur': 'Transporteur',
+            'DG': 'Directeur Général',
+            'PDG': 'Président Directeur Général',
         }
-        return labels.get(self.role, self.role)
+        return labels.get(self.role, self.role or 'Utilisateur')
+
+    @property
+    def can_creer_bdc(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_creer_bdc or self.role in ('DT', 'DTA', 'magasinier', 'Directeur Technique', 'Directeur Technique Adjoint', 'Magasinier'))
+
+    @property
+    def can_valider_dt(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_valider_dt or self.role in ('DT', 'Directeur Technique'))
+
+    @property
+    def can_gerer_stock(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_gerer_stock or self.role in ('DT', 'DTA', 'magasinier', 'Directeur Technique', 'Directeur Technique Adjoint', 'Magasinier'))
+
+    def can_annuler(self, bdc=None):
+        if not self.actif or self.est_spectateur:
+            return False
+        if bdc and getattr(bdc, 'statut', None) in ('cloturee', 'annulee'):
+            return False
+        return bool(self.peut_annuler or self.role in ('DT', 'DTA', 'Directeur Technique', 'Directeur Technique Adjoint'))
+
+    @property
+    def can_cloturer(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_cloturer or self.role in ('DT', 'DTA', 'Directeur Technique', 'Directeur Technique Adjoint'))
+
+    @property
+    def can_recuperer(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_recuperer or self.role in ('DT', 'DTA', 'magasinier', 'transporteur', 'Directeur Technique', 'Magasinier', 'Transporteur'))
+
+    @property
+    def can_gerer_utilisateurs(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.peut_gerer_utilisateurs or self.role in ('DT', 'Directeur Technique'))
 
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
