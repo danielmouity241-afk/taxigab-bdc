@@ -237,6 +237,49 @@ def test_workflow():
     assert res_admin_aide.status_code == 403
     print("   [OK] Aide Magasinier peut créer un bon mais ne peut pas administrer les comptes")
 
+    # e) Test de la suppression définitive d'un utilisateur
+    client.get('/logout', follow_redirects=True)
+    client.post('/login', data={'username': 'dt', 'password': 'DT@2026!'}, follow_redirects=True)
+    
+    # Créer un bon avec aide_mag avant de le supprimer
+    with app.app_context():
+        u_aide = User.query.filter_by(username='aide_mag').first()
+        aide_id = u_aide.id
+        # Créer un BDC associé à u_aide
+        b_test = BonDeCommande(
+            numero=999,
+            type_bon='vehicule',
+            createur_id=aide_id,
+            demandeur_nom='Aide Magasinier',
+            fournisseur='Fournisseur Test'
+        )
+        db.session.add(b_test)
+        db.session.commit()
+        b_test_id = b_test.id
+
+    # Supprimer définitivement aide_mag via la route admin
+    res_delete = client.post(f'/admin/utilisateurs/{aide_id}/supprimer', follow_redirects=True)
+    assert res_delete.status_code == 200
+    assert "a été définitivement supprimé" in res_delete.data.decode('utf-8')
+    assert "aide_mag" not in res_delete.data.decode('utf-8')
+
+    # Vérifier en base de données qu'il n'existe plus
+    with app.app_context():
+        assert User.query.filter_by(username='aide_mag').first() is None
+        # Vérifier que le bon existe toujours et que son createur_id est devenu None sans crasher
+        b_saved = BonDeCommande.query.get(b_test_id)
+        assert b_saved is not None
+        assert b_saved.createur_id is None
+
+    # Vérifier l'affichage du bon sans crash
+    res_view_b = client.get(f'/bdc/{b_test_id}')
+    assert res_view_b.status_code == 200
+    assert "compte supprimé" in res_view_b.data.decode('utf-8')
+    print("9. Test de la suppression définitive d'un utilisateur...")
+    print("   [OK] Utilisateur supprimé avec succès de la base de données")
+    print("   [OK] Utilisateur n'apparaît plus dans la gestion des utilisateurs")
+    print("   [OK] Historique des bons de commande préservé sans crash")
+
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
     print("=======================================================")
