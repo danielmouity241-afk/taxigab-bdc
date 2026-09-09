@@ -213,16 +213,29 @@
           </div>
           {% endif %}
 
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary-navy fw-semibold px-4 py-2">
-              <i class="bi bi-check2-circle me-2"></i>
-              {% if user %}Enregistrer les modifications{% else %}Créer l'utilisateur{% endif %}
-            </button>
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary px-4 py-2">
-              <i class="bi bi-x-lg me-2"></i>Annuler
-            </a>
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary-navy fw-semibold px-4 py-2">
+                <i class="bi bi-check2-circle me-2"></i>
+                {% if user %}Enregistrer les modifications{% else %}Créer l'utilisateur{% endif %}
+              </button>
+              <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary px-4 py-2">
+                <i class="bi bi-x-lg me-2"></i>Annuler
+              </a>
+            </div>
+            {% if user and user.id != current_user.id %}
+            <div>
+              <button type="button" class="btn btn-outline-danger px-3 py-2"
+                      onclick="if(confirm('⚠️ Êtes-vous certain de vouloir SUPPRIMER DÉFINITIVEMENT cet utilisateur ?\nCette action est irréversible.')) { document.getElementById('form-delete-user').submit(); }">
+                <i class="bi bi-trash3 me-1"></i>Supprimer définitivement cet utilisateur
+              </button>
+            </div>
+            {% endif %}
           </div>
         </form>
+        {% if user and user.id != current_user.id %}
+        <form id="form-delete-user" method="POST" action="{{ url_for('admin_user_delete', id=user.id) }}" style="display:none;"></form>
+        {% endif %}
       </div>
     </div>
   </div>
