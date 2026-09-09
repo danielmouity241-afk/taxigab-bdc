@@ -80,6 +80,13 @@
           <!-- Section Spécifique Véhicule (masquée si Bon Garage) -->
           <div id="section-vehicule" class="col-12">
             <div class="p-3 bg-light rounded border">
+              <div class="alert alert-danger border-2 border-danger d-flex align-items-center mb-3 py-2">
+                <i class="bi bi-shield-exclamation text-danger fs-4 me-3"></i>
+                <div>
+                  <strong class="text-danger">Contrôle obligatoire :</strong>
+                  <span class="small text-dark">Assurez-vous d'avoir vérifié la <strong>caution du transporteur</strong> avant d'engager ce bon de commande.</span>
+                </div>
+              </div>
               <h6 class="fw-bold text-navy mb-3"><i class="bi bi-car-front me-2"></i>Informations Véhicule & Transporteur</h6>
               <div class="row g-3">
                 <div class="col-md-4">
@@ -106,7 +113,7 @@
             <div class="alert alert-success d-flex align-items-center mb-0 py-2">
               <i class="bi bi-info-circle-fill fs-5 me-2"></i>
               <div>
-                <strong>Affectation : GARAGE (Usage Interne)</strong>
+                <strong>Destination : GARAGE (Usage Interne Atelier)</strong>
                 <div class="small">Ce bon ne concerne aucun véhicule ni chauffeur particulier. La mention Garage et les visas internes seront automatiquement appliqués.</div>
               </div>
             </div>
@@ -288,6 +295,61 @@ function toggleTypeBon(type) {
 document.addEventListener('DOMContentLoaded', function() {
   const isGarage = document.getElementById('type_garage').checked;
   toggleTypeBon(isGarage ? 'garage' : 'vehicule');
+
+  // Avertissement obligatoire pour la vérification de caution
+  const modalCautionEl = document.getElementById('modal-avertissement-caution');
+  if (modalCautionEl) {
+    const modalCaution = new bootstrap.Modal(modalCautionEl, {
+      backdrop: 'static',
+      keyboard: false
+    });
+    modalCaution.show();
+  }
 });
 </script>
+
+<!-- ── MODAL AVERTISSEMENT VÉRIFICATION CAUTION ────────────────────────── -->
+<div class="modal fade" id="modal-avertissement-caution" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger border-2 shadow-lg">
+      <div class="modal-header bg-danger text-white py-3">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>AVERTISSEMENT OBLIGATOIRE
+        </h5>
+      </div>
+      <div class="modal-body p-4 text-center">
+        <div class="mb-3">
+          <div class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background-color: #fee2e2;">
+            <i class="bi bi-shield-lock-fill text-danger" style="font-size: 3rem;"></i>
+          </div>
+        </div>
+        
+        <h5 class="fw-bold text-navy mb-3">Vérification préalable de la caution</h5>
+        
+        <div class="alert alert-danger border-danger border-2 text-start p-3 mb-3">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-1 flex-shrink-0"></i>
+            <div>
+              <div class="fw-bold fs-6 text-danger mb-1">
+                Avant de faire ce bon de commande, assurez-vous impérativement d'avoir vérifié la caution du transporteur.
+              </div>
+              <div class="small text-dark mt-2">
+                Aucune commande de pièces ne doit être émise sans s'être assuré au préalable de la solvabilité, de la conformité et du dépôt effectif de la caution du chauffeur ou du transporteur concerné.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-muted small mb-0">
+          Cette vérification est une condition préalable obligatoire pour pouvoir continuer et établir ce bon de commande.
+        </p>
+      </div>
+      <div class="modal-footer bg-light p-3">
+        <button type="button" class="btn btn-danger btn-lg w-100 fw-bold shadow-sm" data-bs-dismiss="modal" id="btn-confirmer-caution">
+          <i class="bi bi-check-circle-fill me-2"></i>OK, j'ai vérifié la caution — Continuer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
