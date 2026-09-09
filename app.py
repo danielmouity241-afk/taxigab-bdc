@@ -745,12 +745,33 @@ def create_app():
         flash(f'Compte {user.nom_complet} désactivé.', 'warning')
         return redirect(url_for('admin_users'))
 
+    # Initialisation automatique des tables et comptes par défaut au démarrage
+    with app.app_context():
+        try:
+            db.create_all()
+            default_users = [
+                {'username': 'dt',          'password': 'DT@2026!',     'nom': 'Directeur Technique',         'role': 'DT'},
+                {'username': 'dta',         'password': 'DTA@2026!',    'nom': 'Directeur Technique Adjoint', 'role': 'DTA'},
+                {'username': 'magasinier',  'password': 'Mag@2026!',    'nom': 'Magasinier Principal',        'role': 'magasinier'},
+                {'username': 'transporteur','password': 'Trans@2026!',  'nom': 'Transporteur',                'role': 'transporteur'},
+            ]
+            for u_data in default_users:
+                if not User.query.filter_by(username=u_data['username']).first():
+                    u = User(
+                        username=u_data['username'],
+                        nom_complet=u_data['nom'],
+                        role=u_data['role']
+                    )
+                    u.set_password(u_data['password'])
+                    db.session.add(u)
+            db.session.commit()
+        except Exception as e:
+            print("Erreur initialisation DB auto:", e)
+
     return app
 
 
 app = create_app()
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host=Config.HOST, port=Config.PORT, debug=Config.DEBUG)
