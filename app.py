@@ -871,14 +871,14 @@ def create_app():
 
             # Migration automatique des colonnes de permissions sur users
             colonnes_permissions = [
-                ("peut_creer_bdc", "BOOLEAN DEFAULT 0"),
-                ("peut_valider_dt", "BOOLEAN DEFAULT 0"),
-                ("peut_gerer_stock", "BOOLEAN DEFAULT 0"),
-                ("peut_recuperer", "BOOLEAN DEFAULT 0"),
-                ("peut_cloturer", "BOOLEAN DEFAULT 0"),
-                ("peut_annuler", "BOOLEAN DEFAULT 0"),
-                ("peut_gerer_utilisateurs", "BOOLEAN DEFAULT 0"),
-                ("est_spectateur", "BOOLEAN DEFAULT 0"),
+                ("peut_creer_bdc", "BOOLEAN DEFAULT FALSE"),
+                ("peut_valider_dt", "BOOLEAN DEFAULT FALSE"),
+                ("peut_gerer_stock", "BOOLEAN DEFAULT FALSE"),
+                ("peut_recuperer", "BOOLEAN DEFAULT FALSE"),
+                ("peut_cloturer", "BOOLEAN DEFAULT FALSE"),
+                ("peut_annuler", "BOOLEAN DEFAULT FALSE"),
+                ("peut_gerer_utilisateurs", "BOOLEAN DEFAULT FALSE"),
+                ("est_spectateur", "BOOLEAN DEFAULT FALSE"),
             ]
             for col_nom, col_type in colonnes_permissions:
                 try:
