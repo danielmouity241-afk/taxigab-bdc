@@ -1,0 +1,9 @@
+tunnel: c02ed600-27fc-4107-960d-82db3250bbb4
+credentials-file: C:\Users\hp\.cloudflared\c02ed600-27fc-4107-960d-82db3250bbb4.json
+
+ingress:
+  - hostname: taxigab-bdc.com
+    service: http://localhost:5000
+  - hostname: www.taxigab-bdc.com
+    service: http://localhost:5000
+  - service: http_status:404
