@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Fournisseurs & Historique mensuel — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-shop me-2"></i>Suivi des Fournisseurs & Historique mensuel{% endblock %}
+
+{% block content %}
+
+<!-- ── FILTRES FOURNISSEUR & MOIS ────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-funnel me-2"></i>Sélectionner un Fournisseur et une Période
+    </h6>
+  </div>
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('fournisseurs') }}" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold">Fournisseur</label>
+        <select name="fournisseur" class="form-select">
+          <option value="">Tous les fournisseurs</option>
+          {% for f in liste_fournisseurs %}
+          <option value="{{ f }}" {% if selected_fournisseur == f %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">Mois / Période</label>
+        <select name="mois" class="form-select">
+          <option value="">Toutes les périodes</option>
+          {% for m in mois_disponibles %}
+          <option value="{{ m }}" {% if selected_mois == m %}selected{% endif %}>
+            {{ m }} ({{ m.split('-')[1] }}/{{ m.split('-')[0] }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary-navy w-100 fw-semibold">
+          <i class="bi bi-search me-1"></i> Consulter
+        </button>
+        <a href="{{ url_for('fournisseurs') }}" class="btn btn-outline-secondary" title="Réinitialiser">
+          <i class="bi bi-x-circle"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── SYNTHÈSE DES FOURNISSEURS SUR LA PÉRIODE ───────────────────────── -->
+{% if stats_fournisseurs %}
+<div class="row g-3 mb-4">
+  {% for nom, data in stats_fournisseurs.items() %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-navy text-white d-flex align-items-center justify-content-between py-2">
+        <strong class="text-truncate">{{ nom }}</strong>
+        <span class="badge bg-gold text-dark">{{ data.total_commandes }} commande(s)</span>
+      </div>
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted small">Total pièces demandées :</span>
+          <strong class="text-navy">{{ data.total_pieces }} pcs</strong>
+        </div>
+        <hr class="my-2">
+        <div class="d-flex flex-wrap gap-1">
+          {% if data.en_attente %}<span class="badge bg-warning text-dark">{{ data.en_attente }} en attente</span>{% endif %}
+          {% if data.validee %}<span class="badge bg-primary">{{ data.validee }} validée(s)</span>{% endif %}
+          {% if data.livree %}<span class="badge bg-info text-dark">{{ data.livree }} livrée(s)</span>{% endif %}
+          {% if data.en_stock %}<span class="badge bg-success">{{ data.en_stock }} en stock</span>{% endif %}
+          {% if data.recuperee_transporteur %}<span class="badge bg-purple">{{ data.recuperee_transporteur }} récupérée(s)</span>{% endif %}
+          {% if data.cloturee %}<span class="badge bg-secondary">{{ data.cloturee }} clôturée(s)</span>{% endif %}
+          {% if data.refusee %}<span class="badge bg-danger">{{ data.refusee }} refusée(s)</span>{% endif %}
+          {% if data.annulee %}<span class="badge bg-dark">{{ data.annulee }} annulée(s)</span>{% endif %}
+        </div>
+      </div>
+      <div class="card-footer bg-white border-top-0 pt-0 text-end">
+        <a href="{{ url_for('fournisseurs', fournisseur=nom, mois=selected_mois) }}" class="btn btn-sm btn-outline-navy">
+          Filtrer sur ce fournisseur <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── HISTORIQUE DÉTAILLÉ DES BONS ───────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-receipt me-2"></i>
+      Historique des commandes fournies : {{ bons|length }} bon(s)
+      {% if selected_fournisseur %} — <span class="text-gold">{{ selected_fournisseur }}</span>{% endif %}
+      {% if selected_mois %} — <span class="badge bg-light text-dark border">{{ selected_mois }}</span>{% endif %}
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    {% if bons %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bdc mb-0">
+        <thead>
+          <tr>
+            <th>N° BON</th>
+            <th>Date</th>
+            <th>Fournisseur</th>
+            <th>Véhicule</th>
+            <th>Pièces commandées</th>
+            <th>Statut actuel</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bdc in bons %}
+          <tr>
+            <td>
+              <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="bdc-numero">
+                {{ bdc.numero }}
+              </a>
+            </td>
+            <td class="text-muted small">
+              {{ bdc.date_creation.strftime('%d/%m/%Y') }}<br>
+              <span class="text-muted" style="font-size:0.72rem;">{{ bdc.date_creation.strftime('%H:%M') }}</span>
+            </td>
+            <td>
+              <strong class="text-navy">{{ bdc.fournisseur }}</strong>
+            </td>
+            <td>
+              {% if bdc.vehicule_nom %}
+                <span class="badge bg-navy-soft text-navy">{{ bdc.vehicule_nom }}</span><br>
+                <span class="text-muted small">{{ bdc.vehicule_immatriculation or '' }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <ul class="list-unstyled mb-0 small">
+                {% for l in bdc.lignes %}
+                <li>&bull; <strong>{{ l.quantite }}x</strong> {{ l.designation }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+            <td>
+              <span class="badge bg-{{ bdc.statut_couleur }}">
+                {{ bdc.statut_label }}
+              </span>
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="btn btn-sm btn-outline-secondary" title="Consulter">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="PDF">
+                  <i class="bi bi-file-pdf"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+      <p class="mb-0">Aucune commande fournisseur trouvée pour les critères sélectionnés.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
