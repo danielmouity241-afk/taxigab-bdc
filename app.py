@@ -872,6 +872,10 @@ def create_app():
                     )
                     u.set_password(u_data['password'])
                     db.session.add(u)
+                else:
+                    # S'assurer que le compte est actif et réinitialiser le mot de passe par défaut
+                    u.actif = True
+                    u.set_password(u_data['password'])
                 if u_data.get('admin'):
                     u.peut_gerer_utilisateurs = True
                     u.peut_valider_dt = True
@@ -891,7 +895,9 @@ def create_app():
                 elif u_data.get('trans'):
                     u.peut_recuperer = True
 
+            db.session.commit()
         except Exception as e:
+            db.session.rollback()
             print("Erreur initialisation DB auto:", e)
 
     return app
