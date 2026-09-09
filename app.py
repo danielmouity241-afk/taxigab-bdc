@@ -812,17 +812,49 @@ def create_app():
     @app.route('/admin/utilisateurs/<int:id>/supprimer', methods=['POST'])
     @login_required
     def admin_user_delete(id):
+        """Supprime définitivement un utilisateur de la base de données."""
         if not peut_gerer_utilisateurs(current_user):
             abort(403)
         user = db.session.get(User, id)
         if not user:
             abort(404)
         if user.id == current_user.id:
-            flash('Vous ne pouvez pas désactiver votre propre compte.', 'danger')
+            flash('Vous ne pouvez pas supprimer votre propre compte.', 'danger')
             return redirect(url_for('admin_users'))
-        user.actif = False
+
+        nom_supprime = user.nom_complet
+
+        # Détacher l'utilisateur des bons créés et actions pour ne pas corrompre l'historique
+        from database import BonDeCommande, HistoriqueAction
+        BonDeCommande.query.filter_by(createur_id=user.id).update({'createur_id': None})
+        BonDeCommande.query.filter_by(validateur_dt_id=user.id).update({'validateur_dt_id': None})
+        BonDeCommande.query.filter_by(receptionniste_id=user.id).update({'receptionniste_id': None})
+        BonDeCommande.query.filter_by(magasinier_stock_id=user.id).update({'magasinier_stock_id': None})
+        BonDeCommande.query.filter_by(annulateur_id=user.id).update({'annulateur_id': None})
+        HistoriqueAction.query.filter_by(user_id=user.id).update({'user_id': None})
+
+        # Suppression définitive
+        db.session.delete(user)
         db.session.commit()
-        flash(f'Compte {user.nom_complet} désactivé.', 'warning')
+        flash(f"L'utilisateur « {nom_supprime} » a été définitivement supprimé.", 'success')
+        return redirect(url_for('admin_users'))
+
+    @app.route('/admin/utilisateurs/<int:id>/desactiver', methods=['POST'])
+    @login_required
+    def admin_user_toggle_status(id):
+        """Active ou désactive un compte utilisateur sans le supprimer."""
+        if not peut_gerer_utilisateurs(current_user):
+            abort(403)
+        user = db.session.get(User, id)
+        if not user:
+            abort(404)
+        if user.id == current_user.id:
+            flash('Action non autorisée sur votre propre compte.', 'danger')
+            return redirect(url_for('admin_users'))
+        user.actif = not user.actif
+        db.session.commit()
+        statut_txt = "activé" if user.actif else "désactivé"
+        flash(f"Compte {user.nom_complet} {statut_txt}.", 'info')
         return redirect(url_for('admin_users'))
 
     # Initialisation automatique des tables et comptes par défaut au démarrage
