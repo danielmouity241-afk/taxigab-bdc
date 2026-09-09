@@ -137,12 +137,11 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
         demandeur_data = [
             [Paragraph("<b>Demandeur :</b>", S['label']),
              Paragraph(bdc.demandeur_nom or '—', S['value']),
-             Paragraph("<b>Affectation :</b>", S['label']),
-             Paragraph("<b>GARAGE (Usage interne atelier)</b>", S['value'])],
-            [Paragraph("<b>Service / Département :</b>", S['label']),
-             Paragraph(bdc.service_departement or '—', S['value']),
-             Paragraph("<b>Type :</b>", S['label']),
-             Paragraph("Bon de commande interne", S['value'])],
+             Paragraph("<b>Service / Département :</b>", S['label']),
+             Paragraph(bdc.service_departement or '—', S['value'])],
+            [Paragraph("<b>Type de bon :</b>", S['label']),
+             Paragraph("Usage interne atelier garage", S['value']),
+             '', ''],
         ]
     else:
         demandeur_data = [
@@ -150,14 +149,13 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
              Paragraph(bdc.demandeur_nom or '—', S['value']),
              Paragraph("<b>Département :</b>", S['label']),
              Paragraph(bdc.service_departement or '—', S['value'])],
-            [Paragraph("<b>Véhicule concerné :</b>", S['label']),
+            [Paragraph("<b>Véhicule :</b>", S['label']),
              Paragraph(bdc.vehicule_nom or '—', S['value']),
              Paragraph("<b>Immatriculation :</b>", S['label']),
              Paragraph(bdc.vehicule_immatriculation or '—', S['value'])],
             [Paragraph("<b>Transporteur :</b>", S['label']),
              Paragraph(bdc.transporteur or '—', S['value']),
-             Paragraph("<b>Affectation :</b>", S['label']),
-             Paragraph("Flotte Véhicule", S['value'])],
+             '', ''],
         ]
     demandeur_table = Table(demandeur_data, colWidths=[3.5*cm, page_width*0.35, 3.5*cm, page_width*0.25])
     demandeur_table.setStyle(TableStyle([
