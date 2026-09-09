@@ -1,0 +1,598 @@
+{% extends "base.html" %}
+{% block title %}BDC N°{{ bdc.numero }} — TAXI GAB+{% endblock %}
+{% block page_title %}
+  <i class="bi bi-file-text me-2"></i>
+  Bon de commande <span class="text-gold fw-bold">N°{{ bdc.numero }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- ── COLONNE PRINCIPALE ─────────────────────────────────────────── -->
+  <div class="col-lg-8">
+
+    <!-- En-tête BDC (aperçu du document) -->
+    <div class="card border-0 shadow-sm mb-4 bdc-preview">
+      <div class="card-body p-4">
+        <!-- Header -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <img src="{{ url_for('static', filename='images/logo_taxigab.png') }}"
+                 alt="TAXI GAB+" style="height:60px; object-fit:contain;"
+                 onerror="this.style.display='none'">
+          </div>
+          <div class="text-center">
+            {% if bdc.est_garage %}
+            <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE — GARAGE</h4>
+            <span class="badge bg-success mt-1"><i class="bi bi-tools me-1"></i>USAGE INTERNE ATELIER</span>
+            {% else %}
+            <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE</h4>
+            <span class="badge bg-primary-soft text-navy mt-1"><i class="bi bi-car-front me-1"></i>AFFECTATION VÉHICULE</span>
+            {% endif %}
+          </div>
+          <div class="text-end">
+            <div class="bdc-num-box">
+              <div class="text-muted small">N° BON</div>
+              <div class="fw-bold fs-4 text-navy font-monospace">{{ bdc.numero_affiche }}</div>
+            </div>
+            <div class="text-muted small mt-1">
+              {{ bdc.date_creation.strftime('%d/%m/%Y') }}
+            </div>
+          </div>
+        </div>
+        <hr class="border-gold mb-3">
+
+        <!-- Statut -->
+        <div class="text-center mb-3">
+          <span class="badge bg-{{ bdc.statut_couleur }} fs-6 px-4 py-2">
+            {{ bdc.statut_label }}
+          </span>
+        </div>
+
+        <!-- Infos commande & Fournisseur -->
+        <div class="section-block mb-3">
+          <div class="section-block-title text-white bg-navy px-3 py-2 rounded-top">
+            INFORMATIONS DE LA COMMANDE
+          </div>
+          <div class="section-block-body border rounded-bottom p-3">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Fournisseur :</span>
+                <strong class="text-navy fs-6">{{ bdc.fournisseur or '— Non renseigné —' }}</strong>
+              </div>
+
+              {% if bdc.est_garage %}
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Affectation :</span>
+                <span class="badge bg-success-soft text-success border border-success fw-bold fs-6">
+                  <i class="bi bi-tools me-1"></i>GARAGE (Usage interne)
+                </span>
+              </div>
+              {% else %}
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Transporteur / Chauffeur :</span>
+                <div>{{ bdc.transporteur or '— Non renseigné —' }}</div>
+              </div>
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Véhicule concerné :</span>
+                <div>
+                  {% if bdc.vehicule_nom %}
+                  <span class="badge bg-navy-soft text-navy">{{ bdc.vehicule_nom }}</span>
+                  {% endif %}
+                  {% if bdc.vehicule_immatriculation %}
+                  <span class="ms-1">{{ bdc.vehicule_immatriculation }}</span>
+                  {% endif %}
+                  {% if not bdc.vehicule_nom and not bdc.vehicule_immatriculation %}—{% endif %}
+                </div>
+              </div>
+              {% endif %}
+
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Demandeur :</span>
+                <div class="fw-bold">{{ bdc.demandeur_nom }}</div>
+                <div class="text-muted small">{{ bdc.service_departement or '' }}</div>
+              </div>
+
+              <div class="col-md-6">
+                <span class="fw-semibold text-muted small d-block">Créé par :</span>
+                <div>{{ bdc.createur.nom_complet }} <span class="badge bg-light text-dark border ms-1">{{ bdc.createur.role_label }}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tableau des pièces -->
+        <div class="section-block mb-3">
+          <div class="section-block-title text-white bg-navy px-3 py-2 rounded-top">
+            MATÉRIAUX DEMANDÉS
+          </div>
+          <div class="table-responsive border rounded-bottom">
+            <table class="table table-bordered table-bdc mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:50px;" class="text-center">N°</th>
+                  <th>DÉSIGNATION</th>
+                  <th style="width:80px;" class="text-center">QTÉ</th>
+                  <th>OBSERVATIONS</th>
+                  <th class="text-center">RÉCEPTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ligne in bdc.lignes %}
+                <tr>
+                  <td class="text-center align-middle">{{ loop.index }}</td>
+                  <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
+                  <td class="text-center align-middle">{{ ligne.quantite }}</td>
+                  <td class="align-middle text-muted">{{ ligne.observations or '' }}</td>
+                  <td class="text-center align-middle">
+                    <span class="badge bg-{{ ligne.statut_reception_couleur }}">
+                      {{ ligne.statut_reception_label }}
+                    </span>
+                    {% if ligne.quantite_recue and ligne.statut_reception == 'partiel' %}
+                    <div class="small text-muted">{{ ligne.quantite_recue }}/{{ ligne.quantite }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Observations générales -->
+        {% if bdc.observations_generales %}
+        <div class="section-block mb-3">
+          <div class="section-block-title text-white bg-navy px-3 py-2 rounded-top">
+            OBSERVATIONS GÉNÉRALES
+          </div>
+          <div class="border rounded-bottom p-3">
+            {{ bdc.observations_generales }}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Signatures / Visas -->
+        <div class="row g-3 mt-2">
+          <div class="col-6">
+            <div class="sign-box text-center p-3 border rounded">
+              {% if bdc.est_garage %}
+              <div class="fw-bold text-navy mb-2">DEMANDEUR / ATELIER</div>
+              <div class="text-muted small">Signature & Date</div>
+              {% else %}
+              <div class="fw-bold text-navy mb-2">TRANSPORTEUR / CHAUFFEUR</div>
+              <div class="text-muted small">Signature</div>
+              {% endif %}
+              <div class="sign-space mt-3 border-bottom mx-4"></div>
+              <div class="mt-2 small text-muted">
+                {{ bdc.demandeur_nom if bdc.est_garage else (bdc.transporteur or '—') }}
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="sign-box text-center p-3 border rounded">
+              <div class="fw-bold text-navy mb-2">DIRECTION TECHNIQUE</div>
+              <div class="text-muted small">Signature & Cachet</div>
+              <div class="sign-space mt-3 border-bottom mx-4"></div>
+              {% if bdc.date_validation_dt %}
+              <div class="mt-2 small text-success">
+                <i class="bi bi-check-circle me-1"></i>Validé par {{ bdc.validateur_dt.nom_complet if bdc.validateur_dt else 'DT' }}<br>
+                le {{ bdc.date_validation_dt.strftime('%d/%m/%Y %H:%M') }}
+              </div>
+              {% elif bdc.statut == 'refusee' and bdc.motif_refus_dt %}
+              <div class="mt-2 small text-danger">
+                <i class="bi bi-x-circle me-1"></i>Refusé : {{ bdc.motif_refus_dt }}
+              </div>
+              {% else %}
+              <div class="mt-2 small text-muted">En attente de visa</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+              {% if bdc.date_en_stock %}
+              <div class="mt-2 small text-success">
+                <i class="bi bi-archive me-1"></i>En stock depuis le {{ bdc.date_en_stock.strftime('%d/%m/%Y %H:%M') }}
+              </div>
+              {% elif bdc.date_livraison %}
+              <div class="mt-2 small text-info">
+                <i class="bi bi-box-seam me-1"></i>Livré le {{ bdc.date_livraison.strftime('%d/%m/%Y %H:%M') }}
+              </div>
+              {% else %}
+              <div class="mt-2 small text-muted">En attente de livraison</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Pied de page BDC -->
+        <div class="bdc-footer text-center text-muted small mt-3 pt-3 border-top border-gold">
+          <strong>TAXI GAB +</strong> &bull; Libreville, OLOUMI GABON MALL, B.P 7186
+          &bull; Tél : +241 62 14 05 05<br>
+          NIF : 2024 0100 7748 P &bull; RCCM : GA-LBV-01-2024-B17-00034
+          &bull; S.A.S.U &bull; Capital : 3 000 000 FCFA
+        </div>
+      </div>
+    </div>
+
+    <!-- Mise à jour réception pièce par pièce -->
+    {% if bdc.statut not in ['annulee', 'refusee'] and peut_gerer_stock %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-gold">
+        <i class="bi bi-box-seam me-2"></i>Pointage et Réception des Pièces
+      </div>
+      <div class="card-body">
+        {% for ligne in bdc.lignes %}
+        <div class="reception-ligne border rounded p-3 mb-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+              <span class="fw-bold">{{ loop.index }}. {{ ligne.designation }}</span>
+              <span class="badge bg-light text-dark border ms-2">QTÉ DEMANDÉE : {{ ligne.quantite }}</span>
+            </div>
+            <span class="badge bg-{{ ligne.statut_reception_couleur }}">
+              {{ ligne.statut_reception_label }}
+            </span>
+          </div>
+          <form method="POST" action="{{ url_for('bdc_reception', id=bdc.id) }}"
+                class="row g-2 align-items-end">
+            <input type="hidden" name="ligne_id" value="{{ ligne.id }}">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Statut réception</label>
+              <select name="statut_reception" class="form-select form-select-sm">
+                <option value="non_recu" {% if ligne.statut_reception == 'non_recu' %}selected{% endif %}>Non reçu</option>
+                <option value="recu" {% if ligne.statut_reception == 'recu' %}selected{% endif %}>Reçu</option>
+                <option value="partiel" {% if ligne.statut_reception == 'partiel' %}selected{% endif %}>Partiel</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Qté reçue</label>
+              <input type="number" name="quantite_recue" class="form-control form-control-sm"
+                     value="{{ ligne.quantite_recue or 0 }}" min="0" max="{{ ligne.quantite }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold">Note / Observation</label>
+              <input type="text" name="note_reception" class="form-control form-control-sm"
+                     value="{{ ligne.note_reception or '' }}"
+                     placeholder="Remarque...">
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-sm btn-primary-navy w-100">
+                <i class="bi bi-check2"></i> Enregistrer
+              </button>
+            </div>
+          </form>
+          {% if ligne.date_reception %}
+          <div class="text-muted small mt-1">
+            <i class="bi bi-clock me-1"></i>Dernière mise à jour : {{ ligne.date_reception.strftime('%d/%m/%Y %H:%M') }}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Historique du bon -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="mb-0 fw-bold text-navy">
+          <i class="bi bi-clock-history me-2"></i>Historique du bon
+        </h6>
+      </div>
+      <div class="card-body p-3">
+        {% if bdc.historique %}
+        <div class="timeline">
+          {% for action in bdc.historique %}
+          <div class="timeline-item">
+            <div class="timeline-dot">
+              <i class="bi {{ action.icone }}"></i>
+            </div>
+            <div class="timeline-content">
+              <div class="d-flex align-items-center justify-content-between">
+                <strong>{{ action.type_action_label }}</strong>
+                <span class="text-muted small">{{ action.timestamp.strftime('%d/%m/%Y %H:%M') }}</span>
+              </div>
+              {% if action.acteur %}<div class="text-muted small"><i class="bi bi-person me-1"></i>{{ action.acteur.nom_complet }}</div>{% endif %}
+              {% if action.ancien_statut and action.nouveau_statut %}
+              <div class="small mt-1">
+                <span class="badge bg-secondary">{{ action.ancien_statut }}</span>
+                <i class="bi bi-arrow-right mx-1"></i>
+                <span class="badge bg-primary">{{ action.nouveau_statut }}</span>
+              </div>
+              {% endif %}
+              {% if action.details %}<div class="small text-muted mt-1">{{ action.details }}</div>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Aucune action enregistrée.</p>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── COLONNE ACTIONS ─────────────────────────────────────────────── -->
+  <div class="col-lg-4">
+
+    <!-- Actions principales selon le cycle de vie -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy">
+        <i class="bi bi-lightning me-2"></i>Actions sur le Bon
+      </div>
+      <div class="card-body d-grid gap-2">
+
+        <!-- Imprimer PDF -->
+        <a href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank"
+           class="btn btn-outline-danger fw-semibold">
+          <i class="bi bi-file-pdf me-2"></i>Imprimer / Télécharger PDF
+        </a>
+
+        <!-- 1. VALIDATION DT (si en attente) -->
+        {% if peut_valider and bdc.statut == 'en_attente' %}
+        <button type="button" class="btn btn-success fw-semibold"
+                data-bs-toggle="modal" data-bs-target="#modal-valider">
+          <i class="bi bi-check-circle me-2"></i>Valider le bon (DT)
+        </button>
+        <button type="button" class="btn btn-outline-danger fw-semibold"
+                data-bs-toggle="modal" data-bs-target="#modal-refus-validation">
+          <i class="bi bi-x-circle me-2"></i>Refuser le bon (DT)
+        </button>
+        {% endif %}
+
+        <!-- 2. LIVRAISON PAR LE FOURNISSEUR (si validé ou en attente) -->
+        {% if peut_gerer_stock and bdc.statut in ['validee', 'en_attente'] %}
+        <button type="button" class="btn btn-info text-white fw-semibold"
+                data-bs-toggle="modal" data-bs-target="#modal-livrer">
+          <i class="bi bi-box-seam me-2"></i>Marquer comme Livrée
+        </button>
+        {% endif %}
+
+        <!-- 3. MISE EN STOCK (si livrée ou validée) -->
+        {% if peut_gerer_stock and bdc.statut in ['livree', 'validee'] %}
+        <button type="button" class="btn btn-success fw-semibold"
+                data-bs-toggle="modal" data-bs-target="#modal-en-stock">
+          <i class="bi bi-archive-fill me-2"></i>Mettre en stock
+        </button>
+        {% endif %}
+
+        <!-- 4. BON RÉCUPÉRÉ PAR LE TRANSPORTEUR -->
+        {% if not bdc.est_garage and bdc.statut in ['validee', 'livree', 'en_stock', 'en_attente'] %}
+        <button type="button" class="btn btn-purple fw-semibold text-white"
+                style="background-color: #6f42c1 !important; border-color: #6f42c1 !important; color: #ffffff !important;"
+                data-bs-toggle="modal" data-bs-target="#modal-recuperer">
+          <i class="bi bi-truck me-2 text-white"></i>Bon récupéré par le transporteur
+        </button>
+        {% endif %}
+
+        <!-- 5. CLÔTURE -->
+        {% if current_user.role in ['DT', 'DTA'] and bdc.statut in ['recuperee_transporteur', 'en_stock', 'livree'] %}
+        <form method="POST" action="{{ url_for('bdc_cloturer', id=bdc.id) }}"
+              onsubmit="return confirm('Clôturer ce bon de commande ?')">
+          <button type="submit" class="btn btn-secondary fw-semibold w-100">
+            <i class="bi bi-lock-fill me-2"></i>Clôturer le bon
+          </button>
+        </form>
+        {% endif %}
+
+        <!-- 6. ANNULATION -->
+        {% if peut_annuler and bdc.statut not in ['cloturee', 'annulee'] %}
+        <button type="button" class="btn btn-dark btn-sm"
+                data-bs-toggle="modal" data-bs-target="#modal-annuler">
+          <i class="bi bi-trash me-2"></i>Annuler le bon
+        </button>
+        {% endif %}
+
+        <a href="{{ url_for('bdc_list') }}" class="btn btn-outline-secondary btn-sm mt-2">
+          <i class="bi bi-arrow-left me-2"></i>Retour à la liste
+        </a>
+      </div>
+    </div>
+
+    <!-- Informations du bon -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-info-circle me-2"></i>Suivi des Étapes</h6>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-6 text-muted">Type de Bon</dt>
+          <dd class="col-6">
+            {% if bdc.est_garage %}
+            <span class="badge bg-success">Garage (Interne)</span>
+            {% else %}
+            <span class="badge bg-primary">Véhicule</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-6 text-muted">N° Bon</dt>
+          <dd class="col-6 fw-bold text-navy font-monospace">{{ bdc.numero_affiche }}</dd>
+
+          <dt class="col-6 text-muted">Fournisseur</dt>
+          <dd class="col-6 fw-bold text-navy">{{ bdc.fournisseur or '—' }}</dd>
+
+          <dt class="col-6 text-muted">Date création</dt>
+          <dd class="col-6">{{ bdc.date_creation.strftime('%d/%m/%Y %H:%M') }}</dd>
+
+          <dt class="col-6 text-muted">Créé par</dt>
+          <dd class="col-6">{{ bdc.createur.nom_complet }}</dd>
+
+          {% if bdc.date_validation_dt %}
+          <dt class="col-6 text-muted">Validé le</dt>
+          <dd class="col-6 text-success">{{ bdc.date_validation_dt.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+
+          {% if bdc.date_livraison %}
+          <dt class="col-6 text-muted">Livraison fourn.</dt>
+          <dd class="col-6 text-info">{{ bdc.date_livraison.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+
+          {% if bdc.date_en_stock %}
+          <dt class="col-6 text-muted">Mis en stock le</dt>
+          <dd class="col-6 text-success">{{ bdc.date_en_stock.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+
+          {% if bdc.date_recuperation %}
+          <dt class="col-6 text-muted">Récupéré par</dt>
+          <dd class="col-6 text-purple">{{ bdc.nom_recuperateur or 'Transporteur' }} ({{ bdc.date_recuperation.strftime('%d/%m') }})</dd>
+          {% endif %}
+
+          {% if bdc.date_cloture %}
+          <dt class="col-6 text-muted">Clôturé le</dt>
+          <dd class="col-6">{{ bdc.date_cloture.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+
+          {% if bdc.motif_refus_dt %}
+          <dt class="col-6 text-muted">Motif refus</dt>
+          <dd class="col-6 text-danger">{{ bdc.motif_refus_dt }}</dd>
+          {% endif %}
+
+          {% if bdc.motif_annulation %}
+          <dt class="col-6 text-muted">Motif annul.</dt>
+          <dd class="col-6 text-danger">{{ bdc.motif_annulation }}</dd>
+          {% endif %}
+
+          <dt class="col-6 text-muted">Pointage pièces</dt>
+          <dd class="col-6">{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} reçues</dd>
+        </dl>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── MODALS D'ACTION ─────────────────────────────────────────────────── -->
+
+<!-- Valider DT -->
+<div class="modal fade" id="modal-valider" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title"><i class="bi bi-check-circle me-2"></i>Valider le bon N°{{ bdc.numero }}</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">Confirmer la validation du bon N°{{ bdc.numero }} ?</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <form method="POST" action="{{ url_for('bdc_valider', id=bdc.id) }}" class="d-inline">
+          <button type="submit" class="btn btn-success btn-sm">Valider</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Refus DT -->
+<div class="modal fade" id="modal-refus-validation" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h6 class="modal-title"><i class="bi bi-x-circle me-2"></i>Refuser le bon</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_refuser_validation', id=bdc.id) }}">
+        <div class="modal-body">
+          <label class="form-label fw-semibold">Motif du refus :</label>
+          <textarea name="motif" class="form-control" rows="3" placeholder="Précisez le motif du refus..." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-danger btn-sm">Refuser</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Marquer comme Livrée (par le fournisseur) -->
+<div class="modal fade" id="modal-livrer" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h6 class="modal-title"><i class="bi bi-box-seam me-2"></i>Livraison par le fournisseur</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Confirmer la réception de la livraison par le fournisseur pour le bon N°{{ bdc.numero }} ?
+        <div class="small text-muted mt-2">Le statut du bon passera à <strong>Livrée</strong>.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <form method="POST" action="{{ url_for('bdc_livrer', id=bdc.id) }}" class="d-inline">
+          <button type="submit" class="btn btn-info text-white btn-sm">Confirmer livraison</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mettre en stock -->
+<div class="modal fade" id="modal-en-stock" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title"><i class="bi bi-archive-fill me-2"></i>Mise en stock</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Confirmer que les pièces du bon N°{{ bdc.numero }} sont enregistrées et disponibles <strong>En stock</strong> au magasin ?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <form method="POST" action="{{ url_for('bdc_mettre_en_stock', id=bdc.id) }}" class="d-inline">
+          <button type="submit" class="btn btn-success btn-sm">Valider mise en stock</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bon récupéré par le transporteur -->
+<div class="modal fade" id="modal-recuperer" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header text-white" style="background-color: #6f42c1 !important;">
+        <h6 class="modal-title"><i class="bi bi-truck me-2"></i>Bon récupéré par le transporteur</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_recuperer_transporteur', id=bdc.id) }}">
+        <div class="modal-body">
+          <p>Confirmer que le bon de commande et/ou les pièces sont pris en charge par le transporteur :</p>
+          <label class="form-label small fw-semibold">Nom du chauffeur / transporteur ayant récupéré le bon :</label>
+          <input type="text" name="nom_recuperateur" class="form-control"
+                 value="{{ bdc.transporteur or '' }}" placeholder="Nom du chauffeur / transporteur">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-purple text-white btn-sm" style="background-color: #6f42c1 !important; border-color: #6f42c1 !important; color: #ffffff !important;">
+            <i class="bi bi-check2-circle me-1"></i>Confirmer la récupération
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Annuler -->
+<div class="modal fade" id="modal-annuler" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h6 class="modal-title"><i class="bi bi-trash me-2"></i>Annuler le bon N°{{ bdc.numero }}</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_annuler', id=bdc.id) }}">
+        <div class="modal-body">
+          <div class="alert alert-warning small">Le bon sera annulé mais conservé dans l'historique.</div>
+          <label class="form-label fw-semibold">Motif de l'annulation :</label>
+          <textarea name="motif" class="form-control" rows="3" placeholder="Précisez le motif..." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Retour</button>
+          <button type="submit" class="btn btn-dark btn-sm">Annuler le bon</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
