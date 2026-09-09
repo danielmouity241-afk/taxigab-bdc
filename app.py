@@ -46,11 +46,17 @@ def create_app():
 
     # ─── HELPERS ──────────────────────────────────────────────────────────
     def get_next_numero():
-        """Retourne le prochain numéro de BDC."""
-        last = BonDeCommande.query.order_by(BonDeCommande.numero.desc()).first()
-        if last:
-            return last.numero + 1
-        return Config.BDC_START_NUMBER
+        """Retourne le prochain numéro de BDC réinitialisé à 1 chaque début de mois."""
+        now = datetime.utcnow()
+        # Chercher le plus grand numéro créé dans le mois et l'année en cours
+        dernier_du_mois = BonDeCommande.query.filter(
+            extract('year', BonDeCommande.date_creation) == now.year,
+            extract('month', BonDeCommande.date_creation) == now.month
+        ).order_by(BonDeCommande.numero.desc()).first()
+
+        if dernier_du_mois:
+            return dernier_du_mois.numero + 1
+        return 1  # Repart à 00001 chaque nouveau mois
 
     def enregistrer_action(bdc, type_action, ancien_statut=None,
                             nouveau_statut=None, details=None, user=None):
@@ -492,6 +498,7 @@ def create_app():
         ligne_id       = request.form.get('ligne_id')
         nouveau_statut = request.form.get('statut_reception')
         qte_recue      = request.form.get('quantite_recue', 0)
+        livreur_nom    = request.form.get('livreur_nom', '').strip()
         note           = request.form.get('note_reception', '').strip()
 
         ligne = db.session.get(LigneBDC, int(ligne_id))
@@ -499,6 +506,7 @@ def create_app():
             abort(400)
 
         ligne.statut_reception = nouveau_statut
+        ligne.livreur_nom = livreur_nom or bdc.fournisseur or 'Fournisseur'
         try:
             ligne.quantite_recue = int(qte_recue)
         except (ValueError, TypeError):
@@ -506,11 +514,12 @@ def create_app():
         ligne.date_reception = datetime.now()
         ligne.note_reception = note
 
+        livreur_info = f" (livré par {ligne.livreur_nom})" if ligne.livreur_nom else ""
         enregistrer_action(bdc, 'reception_piece',
-                            details=f"Pièce '{ligne.designation}' → {ligne.statut_reception_label} "
+                            details=f"Pièce '{ligne.designation}' → {ligne.statut_reception_label}{livreur_info} "
                                     f"(par {current_user.nom_complet})")
         db.session.commit()
-        flash(f'Réception de « {ligne.designation} » mise à jour.', 'success')
+        flash(f'Réception de « {ligne.designation} » mise à jour avec succès.', 'success')
         return redirect(url_for('bdc_view', id=id))
 
     # ─── PDF ──────────────────────────────────────────────────────────────
@@ -520,12 +529,14 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
-        pdf_bytes = generate_bdc_pdf(bdc, Config)
+        avec_reception = request.args.get('avec_reception') == '1'
+        pdf_bytes = generate_bdc_pdf(bdc, Config, avec_reception=avec_reception)
+        suffixe = "_reception" if avec_reception else ""
         return send_file(
             io.BytesIO(pdf_bytes),
             mimetype='application/pdf',
             as_attachment=False,
-            download_name=f"BDC_{bdc.numero}_{bdc.date_creation.strftime('%d%m%Y')}.pdf"
+            download_name=f"{bdc.numero_affiche.replace('/', '-')}{suffixe}.pdf"
         )
 
     # ─── NOUVELLE RUBRIQUE : FOURNISSEURS & HISTORIQUE MENSUEL ───────────
@@ -749,6 +760,14 @@ def create_app():
     with app.app_context():
         try:
             db.create_all()
+            # Migration automatique si la colonne livreur_nom n'existe pas encore
+            from sqlalchemy import text
+            try:
+                db.session.execute(text("ALTER TABLE lignes_bdc ADD COLUMN livreur_nom VARCHAR(128)"))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
             default_users = [
                 {'username': 'dt',          'password': 'DT@2026!',     'nom': 'Directeur Technique',         'role': 'DT'},
                 {'username': 'dta',         'password': 'DTA@2026!',    'nom': 'Directeur Technique Adjoint', 'role': 'DTA'},
