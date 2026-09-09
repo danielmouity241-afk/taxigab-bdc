@@ -27,7 +27,6 @@
             <span class="badge bg-success mt-1"><i class="bi bi-tools me-1"></i>USAGE INTERNE ATELIER</span>
             {% else %}
             <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE</h4>
-            <span class="badge bg-primary-soft text-navy mt-1"><i class="bi bi-car-front me-1"></i>AFFECTATION VÉHICULE</span>
             {% endif %}
           </div>
           <div class="text-end">
@@ -63,9 +62,9 @@
 
               {% if bdc.est_garage %}
               <div class="col-md-6">
-                <span class="fw-semibold text-muted small d-block">Affectation :</span>
+                <span class="fw-semibold text-muted small d-block">Destination :</span>
                 <span class="badge bg-success-soft text-success border border-success fw-bold fs-6">
-                  <i class="bi bi-tools me-1"></i>GARAGE (Usage interne)
+                  <i class="bi bi-tools me-1"></i>GARAGE (Usage interne atelier)
                 </span>
               </div>
               {% else %}
@@ -108,32 +107,37 @@
             <span class="badge bg-light text-navy">{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} pièce(s) reçue(s)</span>
           </div>
           <div class="table-responsive border rounded-bottom">
-            <table class="table table-bordered table-bdc mb-0">
+            <table class="table table-bordered table-bdc mb-0 align-middle">
               <thead class="table-light">
                 <tr>
                   <th style="width:40px;" class="text-center">N°</th>
                   <th>DÉSIGNATION DE LA PIÈCE</th>
-                  <th style="width:70px;" class="text-center">QTÉ</th>
-                  <th style="width:85px;" class="text-center">REÇU</th>
-                  <th>LIVREUR / SOUS-TRAITANT EFFECTIF & NOTES</th>
-                  <th class="text-center" style="width:130px;">ÉTAT RÉCEPTION</th>
+                  <th style="width:65px;" class="text-center">QTÉ</th>
+                  <th style="width:75px;" class="text-center">REÇU</th>
+                  <th>LIVREUR EFFECTIF & NOTES</th>
+                  <th class="text-center" style="width:120px;">ÉTAT PIÈCE</th>
+                  {% if bdc.statut not in ['annulee', 'refusee'] and peut_gerer_stock %}
+                  <th class="text-center" style="width:170px;">ACTION LIVRAISON</th>
+                  {% endif %}
                 </tr>
               </thead>
               <tbody>
                 {% for ligne in bdc.lignes %}
-                <tr>
-                  <td class="text-center align-middle">{{ loop.index }}</td>
-                  <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
-                  <td class="text-center align-middle">{{ ligne.quantite }}</td>
+                <tr class="{% if ligne.statut_reception == 'recu' %}table-success-soft{% elif ligne.statut_reception == 'partiel' %}table-warning-soft{% endif %}">
+                  <td class="text-center align-middle fw-bold">{{ loop.index }}</td>
+                  <td class="align-middle">
+                    <span class="fw-semibold text-navy">{{ ligne.designation }}</span>
+                    {% if ligne.observations %}<div><small class="text-muted">{{ ligne.observations }}</small></div>{% endif %}
+                  </td>
+                  <td class="text-center align-middle fw-bold">{{ ligne.quantite }}</td>
                   <td class="text-center align-middle fw-bold">
                     {% if ligne.quantite_recue %}
-                      <span class="text-success">{{ ligne.quantite_recue }}</span>/{{ ligne.quantite }}
+                      <span class="{% if ligne.quantite_recue >= ligne.quantite %}text-success{% else %}text-warning{% endif %}">{{ ligne.quantite_recue }}</span>/{{ ligne.quantite }}
                     {% else %}
                       <span class="text-muted">0/{{ ligne.quantite }}</span>
                     {% endif %}
                   </td>
                   <td class="align-middle">
-                    {% if ligne.observations %}<div><small class="text-muted">{{ ligne.observations }}</small></div>{% endif %}
                     {% if ligne.livreur_nom %}
                       <div class="small text-primary"><i class="bi bi-truck me-1"></i>Livré par : <strong>{{ ligne.livreur_nom }}</strong></div>
                     {% endif %}
@@ -146,9 +150,86 @@
                       {{ ligne.statut_reception_label }}
                     </span>
                     {% if ligne.date_reception %}
-                    <div class="text-muted" style="font-size:0.7rem;">{{ ligne.date_reception.strftime('%d/%m/%Y %H:%M') }}</div>
+                    <div class="text-muted" style="font-size:0.7rem;">{{ ligne.date_reception.strftime('%d/%m %H:%M') }}</div>
                     {% endif %}
                   </td>
+                  {% if bdc.statut not in ['annulee', 'refusee'] and peut_gerer_stock %}
+                  <td class="text-center align-middle">
+                    <div class="btn-group btn-group-sm" role="group">
+                      {% if ligne.statut_reception != 'recu' %}
+                      <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='livre') }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-success py-1 px-2" title="Marquer cette pièce comme Livrée">
+                          <i class="bi bi-check-lg me-1"></i>Livré
+                        </button>
+                      </form>
+                      {% else %}
+                      <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='non_recu') }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" title="Marquer cette pièce comme Non livrée">
+                          <i class="bi bi-x-lg me-1"></i>Non livré
+                        </button>
+                      </form>
+                      {% endif %}
+                      <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" data-bs-toggle="modal" data-bs-target="#modal-ligne-{{ ligne.id }}" title="Modifier détails (quantité, livreur...)">
+                        <i class="bi bi-pencil-square"></i>
+                      </button>
+                    </div>
+
+                    <!-- Modal Modification Pièce -->
+                    <div class="modal fade" id="modal-ligne-{{ ligne.id }}" tabindex="-1">
+                      <div class="modal-dialog modal-dialog-centered text-start">
+                        <div class="modal-content">
+                          <div class="modal-header bg-navy text-white py-2">
+                            <h6 class="modal-title fs-6"><i class="bi bi-box-seam me-2"></i>Livraison : {{ ligne.designation }}</h6>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                          </div>
+                          <form method="POST" action="{{ url_for('bdc_reception', id=bdc.id) }}">
+                            <input type="hidden" name="ligne_id" value="{{ ligne.id }}">
+                            <div class="modal-body">
+                              <div class="mb-3">
+                                <label class="form-label small fw-semibold">Statut de livraison</label>
+                                <select name="statut_reception" class="form-select">
+                                  <option value="non_recu" {% if ligne.statut_reception == 'non_recu' %}selected{% endif %}>Non reçu / Non livré</option>
+                                  <option value="recu" {% if ligne.statut_reception == 'recu' %}selected{% endif %}>Reçu / Entièrement livré</option>
+                                  <option value="partiel" {% if ligne.statut_reception == 'partiel' %}selected{% endif %}>Partiellement livré</option>
+                                </select>
+                              </div>
+                              <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                  <label class="form-label small fw-semibold">Qté commandée</label>
+                                  <input type="text" class="form-control" value="{{ ligne.quantite }}" disabled>
+                                </div>
+                                <div class="col-6">
+                                  <label class="form-label small fw-semibold">Qté reçue</label>
+                                  <input type="number" name="quantite_recue" class="form-control"
+                                         value="{{ ligne.quantite_recue or (ligne.quantite if ligne.statut_reception == 'recu' else 0) }}"
+                                         min="0" max="{{ ligne.quantite }}">
+                                </div>
+                              </div>
+                              <div class="mb-3">
+                                <label class="form-label small fw-semibold">Fournisseur ou Livreur effectif</label>
+                                <input type="text" name="livreur_nom" class="form-control"
+                                       value="{{ ligne.livreur_nom or bdc.fournisseur or '' }}"
+                                       placeholder="ex: CFAO, Tractafric, sous-traitant A...">
+                                <div class="form-text text-muted">Indiquez ici si cette pièce a été fournie/livrée par un tiers spécifique.</div>
+                              </div>
+                              <div class="mb-3">
+                                <label class="form-label small fw-semibold">Note / N° Bon de livraison (BL) / Remarque</label>
+                                <input type="text" name="note_reception" class="form-control"
+                                       value="{{ ligne.note_reception or '' }}"
+                                       placeholder="ex: BL N°45892, carton scellé...">
+                              </div>
+                            </div>
+                            <div class="modal-footer py-2">
+                              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                              <button type="submit" class="btn btn-primary-navy btn-sm">Enregistrer pour cette pièce</button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+
+                  </td>
+                  {% endif %}
                 </tr>
                 {% endfor %}
               </tbody>
@@ -205,20 +286,6 @@
             </div>
           </div>
         </div>
-              {% if bdc.date_en_stock %}
-              <div class="mt-2 small text-success">
-                <i class="bi bi-archive me-1"></i>En stock depuis le {{ bdc.date_en_stock.strftime('%d/%m/%Y %H:%M') }}
-              </div>
-              {% elif bdc.date_livraison %}
-              <div class="mt-2 small text-info">
-                <i class="bi bi-box-seam me-1"></i>Livré le {{ bdc.date_livraison.strftime('%d/%m/%Y %H:%M') }}
-              </div>
-              {% else %}
-              <div class="mt-2 small text-muted">En attente de livraison</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
 
         <!-- Pied de page BDC -->
         <div class="bdc-footer text-center text-muted small mt-3 pt-3 border-top border-gold">
@@ -244,9 +311,24 @@
               <span class="fw-bold">{{ loop.index }}. {{ ligne.designation }}</span>
               <span class="badge bg-light text-dark border ms-2">QTÉ DEMANDÉE : {{ ligne.quantite }}</span>
             </div>
-            <span class="badge bg-{{ ligne.statut_reception_couleur }}">
-              {{ ligne.statut_reception_label }}
-            </span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-{{ ligne.statut_reception_couleur }}">
+                {{ ligne.statut_reception_label }}
+              </span>
+              {% if ligne.statut_reception != 'recu' %}
+              <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='livre') }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Marquer Livré">
+                  <i class="bi bi-check-lg"></i> Livré
+                </button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='non_recu') }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Marquer Non livré">
+                  <i class="bi bi-x-lg"></i> Non livré
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </div>
           <form method="POST" action="{{ url_for('bdc_reception', id=bdc.id) }}"
                 class="row g-2 align-items-end">
@@ -558,13 +640,15 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        Confirmer la réception de la livraison par le fournisseur pour le bon N°{{ bdc.numero }} ?
-        <div class="small text-muted mt-2">Le statut du bon passera à <strong>Livrée</strong>.</div>
+        Confirmer le passage du statut général du bon N°{{ bdc.numero }} à <strong>Livrée</strong> ?
+        <div class="small text-muted mt-2">
+          <i class="bi bi-info-circle me-1"></i>Le pointage et la réception effective de chaque pièce (livré / non livré / livreur) se gèrent de manière indépendante directement sur chaque ligne du tableau des matériaux.
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
         <form method="POST" action="{{ url_for('bdc_livrer', id=bdc.id) }}" class="d-inline">
-          <button type="submit" class="btn btn-info text-white btn-sm">Confirmer livraison</button>
+          <button type="submit" class="btn btn-info text-white btn-sm">Confirmer</button>
         </form>
       </div>
     </div>
