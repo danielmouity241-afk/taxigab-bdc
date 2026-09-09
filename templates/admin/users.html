@@ -57,8 +57,8 @@
                   {% if user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier'] %}
                     <span class="badge bg-warning-soft text-dark border" title="Peut pointer et gérer les réceptions">Stock / Réception</span>
                   {% endif %}
-                  {% if user.peut_recuperer or user.role in ['DT', 'DTA', 'magasinier', 'transporteur'] %}
-                    <span class="badge bg-purple-soft text-purple border" title="Peut valider récupération transporteur">Transporteur</span>
+                  {% if user.peut_recuperer or (user.can_recuperer and not user.est_spectateur) %}
+                    <span class="badge bg-purple-soft text-purple border" title="Peut valider la remise / récupération transporteur"><i class="bi bi-truck me-1"></i>Remise transporteur</span>
                   {% endif %}
                   {% if user.peut_cloturer or user.role in ['DT', 'DTA'] %}
                     <span class="badge bg-secondary-soft text-secondary border" title="Peut clôturer un bon">Clôture</span>
