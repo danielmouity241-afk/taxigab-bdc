@@ -95,6 +95,73 @@ def test_workflow():
     assert b'00002' in res.data
     print("   [OK] Affichage 00001 et 00002 validé dans la liste")
 
+    print("6. Test de la réception décentralisée pièce par pièce...")
+    with app.app_context():
+        bdc1 = BonDeCommande.query.get(bdc1_id)
+        lignes = list(bdc1.lignes)
+        assert len(lignes) == 3
+        l1_id, l2_id, l3_id = lignes[0].id, lignes[1].id, lignes[2].id
+
+    # a) Marquer Ligne 1 comme LIVRÉ via l'action rapide
+    res = client.post(f'/bdc/{bdc1_id}/reception_rapide/{l1_id}/livre', follow_redirects=True)
+    assert res.status_code == 200
+
+    with app.app_context():
+        l1 = db.session.get(LigneBDC, l1_id)
+        l2 = db.session.get(LigneBDC, l2_id)
+        l3 = db.session.get(LigneBDC, l3_id)
+        assert l1.statut_reception == 'recu'
+        assert l1.quantite_recue == l1.quantite
+        assert l2.statut_reception == 'non_recu'
+        assert l3.statut_reception == 'non_recu'
+        print(f"   [OK] Ligne 1 marquée Livrée, Lignes 2 et 3 toujours non reçues (décentralisation confirmée)")
+
+    # b) Modifier Ligne 2 : Partiel (2/3) avec livreur tiers Tractafric
+    res = client.post(f'/bdc/{bdc1_id}/reception', data={
+        'ligne_id': l2_id,
+        'statut_reception': 'partiel',
+        'quantite_recue': '2',
+        'livreur_nom': 'Tractafric Gabon',
+        'note_reception': 'BL N°8849'
+    }, follow_redirects=True)
+    assert res.status_code == 200
+
+    with app.app_context():
+        l2 = db.session.get(LigneBDC, l2_id)
+        assert l2.statut_reception == 'partiel'
+        assert l2.quantite_recue == 2
+        assert l2.livreur_nom == 'Tractafric Gabon'
+        print(f"   [OK] Ligne 2 mise à jour : Partiel (2/3), livreur : {l2.livreur_nom}")
+
+    # c) Vérifier que bdc_livrer ne modifie PAS les statuts individuels des lignes
+    res = client.post(f'/bdc/{bdc1_id}/livrer', follow_redirects=True)
+    assert res.status_code == 200
+
+    with app.app_context():
+        l1 = db.session.get(LigneBDC, l1_id)
+        l2 = db.session.get(LigneBDC, l2_id)
+        l3 = db.session.get(LigneBDC, l3_id)
+        assert l1.statut_reception == 'recu'
+        assert l2.statut_reception == 'partiel'  # Pas écrasé !
+        assert l3.statut_reception == 'non_recu' # Pas écrasé !
+        print(f"   [OK] Le statut global Livrée n'a pas écrasé les statuts individuels des pièces")
+
+    # d) Tester le toggle rapide Non livré sur Ligne 1
+    res = client.post(f'/bdc/{bdc1_id}/reception_rapide/{l1_id}/non_recu', follow_redirects=True)
+    assert res.status_code == 200
+    with app.app_context():
+        l1 = db.session.get(LigneBDC, l1_id)
+        assert l1.statut_reception == 'non_recu'
+        assert l1.quantite_recue == 0
+        print(f"   [OK] Ligne 1 basculée en Non livrée avec succès")
+
+    # e) Vérifier l'affichage web view.html
+    res = client.get(f'/bdc/{bdc1_id}')
+    assert res.status_code == 200
+    assert b'AFFECTATION V\xc3\x89HICULE' not in res.data
+    assert b'Affectation :' not in res.data
+    print("   [OK] Aucune mention de Affectation ou Flotte V\xc3\xa9hicule dans la page")
+
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
     print("=======================================================")
