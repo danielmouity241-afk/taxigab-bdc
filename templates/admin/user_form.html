@@ -150,12 +150,12 @@
             </div>
 
             <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
+              <div class="p-3 border rounded h-100 bg-white shadow-xs" style="border-left: 4px solid #7c3aed !important;">
                 <div class="form-check form-switch">
                   <input class="form-check-input perm-action" type="checkbox" name="peut_recuperer" id="perm-recup"
                          {% if user and (user.peut_recuperer or (user.can_recuperer and not user.est_spectateur)) %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-recup">
-                    <i class="bi bi-truck text-purple me-1"></i> Remise au transporteur (Prise en charge)
+                  <label class="form-check-label fw-semibold" for="perm-recup" style="color: #6d28d9;">
+                    <i class="bi bi-truck me-1" style="color: #7c3aed;"></i> Remise au transporteur (Prise en charge)
                   </label>
                 </div>
                 <div class="small text-muted mt-1">Enregistrer la remise du bon et des pièces au transporteur.</div>
