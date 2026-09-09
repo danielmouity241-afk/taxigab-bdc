@@ -176,6 +176,67 @@ def test_workflow():
     assert b'btn-confirmer-caution' in res_create.data
     print("   [OK] Modal d'avertissement rouge sur la caution du transporteur présent et actif")
 
+    print("8. Test des rôles manuels libres et des autorisations fines (Spectateur PDG & Aide Magasinier)...")
+    # a) Création d'un utilisateur PDG (Spectateur seul) via l'interface admin par DT
+    res_user = client.post('/admin/utilisateurs/nouveau', data={
+        'nom_complet': 'M. Le Président Directeur Général',
+        'username': 'pdg',
+        'password': 'PDG@2026!',
+        'role': 'Président Directeur Général (PDG)',
+        'est_spectateur': 'on'
+    }, follow_redirects=True)
+    assert res_user.status_code == 200
+    assert b'PDG' in res_user.data
+    print("   [OK] Compte PDG créé avec rôle manuel et mode spectateur")
+
+    # b) Création d'un utilisateur "Aide Magasinier" avec droits création + stock
+    res_aide = client.post('/admin/utilisateurs/nouveau', data={
+        'nom_complet': 'Albert Aide Magasin',
+        'username': 'aide_mag',
+        'password': 'Aide@2026!',
+        'role': 'Aide Magasinier',
+        'peut_creer_bdc': 'on',
+        'peut_gerer_stock': 'on'
+    }, follow_redirects=True)
+    assert res_aide.status_code == 200
+    assert b'Aide Magasinier' in res_aide.data
+    print("   [OK] Compte Aide Magasinier créé avec permissions ciblées")
+
+    # c) Test de connexion du PDG : consultation totale et PDF autorisés
+    client.get('/logout', follow_redirects=True)
+    res_login_pdg = client.post('/login', data={'username': 'pdg', 'password': 'PDG@2026!'}, follow_redirects=True)
+    assert res_login_pdg.status_code == 200
+
+    # Peut voir dashboard, liste, vue BDC et télécharger PDF
+    res_view_pdg = client.get(f'/bdc/{bdc1_id}')
+    assert res_view_pdg.status_code == 200
+    res_pdf_pdg = client.get(f'/bdc/{bdc1_id}/pdf')
+    assert res_pdf_pdg.status_code == 200
+    print("   [OK] PDG spectateur peut consulter les bons et générer les PDF")
+
+    # Ne peut PAS créer de BDC (403)
+    res_creer_pdg = client.get('/bdc/nouveau')
+    assert res_creer_pdg.status_code == 403
+    # Ne peut PAS valider (403)
+    res_valider_pdg = client.post(f'/bdc/{bdc1_id}/valider')
+    assert res_valider_pdg.status_code == 403
+    # Ne peut PAS accéder à l'administration des utilisateurs (403)
+    res_admin_pdg = client.get('/admin/utilisateurs')
+    assert res_admin_pdg.status_code == 403
+    print("   [OK] Sécurité : PDG spectateur bloqué pour toute action d'écriture ou validation (403)")
+
+    # d) Test de connexion Aide Magasinier
+    client.get('/logout', follow_redirects=True)
+    res_login_aide = client.post('/login', data={'username': 'aide_mag', 'password': 'Aide@2026!'}, follow_redirects=True)
+    assert res_login_aide.status_code == 200
+    # Peut accéder au nouveau bon
+    res_nouveau_aide = client.get('/bdc/nouveau')
+    assert res_nouveau_aide.status_code == 200
+    # Ne peut PAS accéder à l'admin utilisateurs (403)
+    res_admin_aide = client.get('/admin/utilisateurs')
+    assert res_admin_aide.status_code == 403
+    print("   [OK] Aide Magasinier peut créer un bon mais ne peut pas administrer les comptes")
+
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
     print("=======================================================")
