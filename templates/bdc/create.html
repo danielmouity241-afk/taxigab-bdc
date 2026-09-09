@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Nouveau bon de commande — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-plus-circle me-2"></i>Nouveau bon de commande{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('bdc_create') }}" id="bdc-form">
+<div class="row g-4">
+
+  <!-- ── COLONNE PRINCIPALE ─────────────────────────────────────────── -->
+  <div class="col-lg-8">
+
+    <!-- Choix du Type de Bon de Commande -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy">
+        <i class="bi bi-tag me-2"></i>Type de Bon de Commande
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="card p-3 border h-100 cursor-pointer type-bon-card active" id="card-type-vehicule" style="cursor:pointer;">
+              <div class="d-flex align-items-center gap-3">
+                <input class="form-check-input mt-0 fs-5" type="radio" name="type_bon" id="type_vehicule" value="vehicule" checked onchange="toggleTypeBon('vehicule')">
+                <div>
+                  <strong class="d-block text-navy fs-6"><i class="bi bi-car-front-fill me-1 text-primary"></i> Bon Véhicule</strong>
+                  <span class="small text-muted">Pour un taxi ou véhicule spécifique (TG / Chauffeur).</span>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="col-md-6">
+            <label class="card p-3 border h-100 cursor-pointer type-bon-card" id="card-type-garage" style="cursor:pointer;">
+              <div class="d-flex align-items-center gap-3">
+                <input class="form-check-input mt-0 fs-5" type="radio" name="type_bon" id="type_garage" value="garage" onchange="toggleTypeBon('garage')">
+                <div>
+                  <strong class="d-block text-navy fs-6"><i class="bi bi-tools me-1 text-success"></i> Bon Garage (Interne)</strong>
+                  <span class="small text-muted">Outillage, consommables, stock interne du garage.</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informations du demandeur -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy">
+        <i class="bi bi-person-badge me-2"></i>Informations du demandeur
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold required-label">Demandeur</label>
+            <input type="text" name="demandeur_nom" class="form-control"
+                   value="{{ demandeur_defaut }}" required placeholder="Nom complet">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Service / Département</label>
+            <input type="text" name="service_departement" class="form-control"
+                   value="{{ service_defaut }}" placeholder="ex: Direction Technique">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fournisseur & Affectation -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy">
+        <i class="bi bi-shop me-2"></i>Fournisseur & Destination
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Fournisseur</label>
+            <input type="text" name="fournisseur" class="form-control"
+                   placeholder="ex: CFAO Motors, Tractafric, Gabon Pièces...">
+            <div class="form-text text-muted">Le fournisseur auprès duquel les pièces sont commandées.</div>
+          </div>
+
+          <!-- Section Spécifique Véhicule (masquée si Bon Garage) -->
+          <div id="section-vehicule" class="col-12">
+            <div class="p-3 bg-light rounded border">
+              <h6 class="fw-bold text-navy mb-3"><i class="bi bi-car-front me-2"></i>Informations Véhicule & Transporteur</h6>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Véhicule concerné</label>
+                  <input type="text" name="vehicule_nom" id="input_vehicule_nom" class="form-control"
+                         placeholder="ex: TG 433">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Immatriculation</label>
+                  <input type="text" name="vehicule_immatriculation" id="input_immat" class="form-control"
+                         placeholder="ex: LH-819-AA">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Transporteur / Chauffeur</label>
+                  <input type="text" name="transporteur" id="input_transporteur" class="form-control"
+                         placeholder="Nom du chauffeur ou transporteur">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message informatif pour Bon Garage -->
+          <div id="section-garage-info" class="col-12" style="display:none;">
+            <div class="alert alert-success d-flex align-items-center mb-0 py-2">
+              <i class="bi bi-info-circle-fill fs-5 me-2"></i>
+              <div>
+                <strong>Affectation : GARAGE (Usage Interne)</strong>
+                <div class="small">Ce bon ne concerne aucun véhicule ni chauffeur particulier. La mention Garage et les visas internes seront automatiquement appliqués.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Matériaux demandés -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-tools me-2"></i>Matériaux demandés</span>
+        <button type="button" class="btn btn-sm btn-outline-light" onclick="ajouterLigne()">
+          <i class="bi bi-plus-lg me-1"></i> Ajouter une ligne
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-bordered mb-0" id="lignes-table">
+            <thead class="table-light">
+              <tr>
+                <th style="width:50px;" class="text-center">N°</th>
+                <th>DÉSIGNATION <span class="text-danger">*</span></th>
+                <th style="width:100px;">QTÉ</th>
+                <th>OBSERVATIONS</th>
+                <th style="width:50px;"></th>
+              </tr>
+            </thead>
+            <tbody id="lignes-body">
+              <!-- Ligne 1 par défaut -->
+              <tr class="ligne-piece">
+                <td class="text-center align-middle ligne-num">1</td>
+                <td><input type="text" name="designation[]" class="form-control form-control-sm"
+                           placeholder="Désignation de la pièce" required></td>
+                <td><input type="number" name="quantite[]" class="form-control form-control-sm"
+                           value="1" min="1" required></td>
+                <td><input type="text" name="obs_ligne[]" class="form-control form-control-sm"
+                           placeholder="(optionnel)"></td>
+                <td class="text-center align-middle">
+                  <button type="button" class="btn btn-sm btn-outline-danger"
+                          onclick="supprimerLigne(this)" title="Supprimer">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer bg-white">
+        <button type="button" class="btn btn-sm btn-outline-navy" onclick="ajouterLigne()">
+          <i class="bi bi-plus-circle me-1"></i> Ajouter une ligne
+        </button>
+      </div>
+    </div>
+
+    <!-- Observations générales -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header section-header-navy">
+        <i class="bi bi-chat-text me-2"></i>Observations générales
+      </div>
+      <div class="card-body">
+        <textarea name="observations_generales" class="form-control" rows="3"
+                  placeholder="Observations, précisions ou instructions particulières..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── COLONNE ACTIONS ─────────────────────────────────────────────── -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm sticky-top" style="top:20px;">
+      <div class="card-header section-header-gold">
+        <i class="bi bi-send me-2"></i>Soumettre le bon
+      </div>
+      <div class="card-body">
+        {% if current_user.role == 'DT' %}
+        <div class="alert alert-success py-2 small">
+          <i class="bi bi-check-circle me-1"></i>
+          En tant que DT, votre bon sera <strong>automatiquement validé</strong> à la création.
+        </div>
+        {% else %}
+        <div class="alert alert-info py-2 small">
+          <i class="bi bi-info-circle me-1"></i>
+          Votre bon sera soumis au Directeur Technique pour validation avant transmission.
+        </div>
+        {% endif %}
+
+        <div class="d-grid gap-2 mt-3">
+          <button type="submit" class="btn btn-primary-navy btn-lg fw-semibold">
+            <i class="bi bi-send-fill me-2"></i>
+            {% if current_user.role == 'DT' %}Créer & Valider{% else %}Soumettre{% endif %}
+          </button>
+          <a href="{{ url_for('bdc_list') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-x-lg me-2"></i>Annuler
+          </a>
+        </div>
+      </div>
+      <div class="card-footer small text-muted">
+        <i class="bi bi-info-circle me-1"></i>
+        Le numéro de bon sera généré automatiquement.
+      </div>
+    </div>
+  </div>
+
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let ligneCount = 1;
+
+function ajouterLigne() {
+  ligneCount++;
+  const tbody = document.getElementById('lignes-body');
+  const tr = document.createElement('tr');
+  tr.className = 'ligne-piece';
+  tr.innerHTML = `
+    <td class="text-center align-middle ligne-num">${ligneCount}</td>
+    <td><input type="text" name="designation[]" class="form-control form-control-sm"
+               placeholder="Désignation de la pièce" required></td>
+    <td><input type="number" name="quantite[]" class="form-control form-control-sm"
+               value="1" min="1" required></td>
+    <td><input type="text" name="obs_ligne[]" class="form-control form-control-sm"
+               placeholder="(optionnel)"></td>
+    <td class="text-center align-middle">
+      <button type="button" class="btn btn-sm btn-outline-danger"
+              onclick="supprimerLigne(this)" title="Supprimer">
+        <i class="bi bi-trash3"></i>
+      </button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+  renuméroter();
+  tr.querySelector('input[name="designation[]"]').focus();
+}
+
+function supprimerLigne(btn) {
+  const rows = document.querySelectorAll('.ligne-piece');
+  if (rows.length <= 1) {
+    alert('Le bon doit contenir au moins une pièce.');
+    return;
+  }
+  btn.closest('tr').remove();
+  renuméroter();
+}
+
+function toggleTypeBon(type) {
+  const sectionVehicule = document.getElementById('section-vehicule');
+  const sectionGarageInfo = document.getElementById('section-garage-info');
+  const cardVehicule = document.getElementById('card-type-vehicule');
+  const cardGarage = document.getElementById('card-type-garage');
+
+  if (type === 'garage') {
+    sectionVehicule.style.display = 'none';
+    sectionGarageInfo.style.display = 'block';
+    cardGarage.classList.add('border-success', 'bg-light');
+    cardVehicule.classList.remove('border-primary', 'bg-light');
+    // Vider les champs véhicule pour le bon garage
+    document.getElementById('input_vehicule_nom').value = '';
+    document.getElementById('input_immat').value = '';
+    document.getElementById('input_transporteur').value = '';
+  } else {
+    sectionVehicule.style.display = 'block';
+    sectionGarageInfo.style.display = 'none';
+    cardVehicule.classList.add('border-primary', 'bg-light');
+    cardGarage.classList.remove('border-success', 'bg-light');
+  }
+}
+
+// Initialisation au chargement
+document.addEventListener('DOMContentLoaded', function() {
+  const isGarage = document.getElementById('type_garage').checked;
+  toggleTypeBon(isGarage ? 'garage' : 'vehicule');
+});
+</script>
+{% endblock %}
