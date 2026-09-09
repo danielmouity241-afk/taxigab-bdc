@@ -1,0 +1,244 @@
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+
+db = SQLAlchemy()
+
+# ─────────────────────────────────────────
+# UTILISATEURS
+# ─────────────────────────────────────────
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id             = db.Column(db.Integer, primary_key=True)
+    username       = db.Column(db.String(64), unique=True, nullable=False)
+    password_hash  = db.Column(db.String(256), nullable=False)
+    nom_complet    = db.Column(db.String(128), nullable=False)
+    role           = db.Column(db.String(32), nullable=False)  # DT / DTA / magasinier / transporteur
+    actif          = db.Column(db.Boolean, default=True)
+    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relations
+    bons_crees    = db.relationship('BonDeCommande', foreign_keys='BonDeCommande.createur_id', backref='createur', lazy=True)
+    bons_valides  = db.relationship('BonDeCommande', foreign_keys='BonDeCommande.validateur_dt_id', backref='validateur_dt', lazy=True)
+    actions       = db.relationship('HistoriqueAction', backref='acteur', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    @property
+    def role_label(self):
+        labels = {
+            'DT': 'Directeur Technique',
+            'DTA': 'Dir. Technique Adjoint',
+            'magasinier': 'Magasinier',
+            'transporteur': 'Transporteur',
+        }
+        return labels.get(self.role, self.role)
+
+    def __repr__(self):
+        return f'<User {self.username} ({self.role})>'
+
+
+# ─────────────────────────────────────────
+# STATUTS BON DE COMMANDE
+# ─────────────────────────────────────────
+STATUTS_BDC = {
+    'en_attente':              'En attente',
+    'validee':                 'Validée',
+    'refusee':                 'Refusée',
+    'livree':                  'Livrée',
+    'en_stock':                'En stock',
+    'recuperee_transporteur':  'Récupérée par le transporteur',
+    'cloturee':                'Clôturée',
+    'annulee':                 'Annulée',
+}
+
+STATUTS_COULEURS = {
+    'en_attente':              'warning',
+    'validee':                 'primary',
+    'refusee':                 'danger',
+    'livree':                  'info',
+    'en_stock':                'success',
+    'recuperee_transporteur':  'purple',
+    'cloturee':                'secondary',
+    'annulee':                 'dark',
+}
+
+class BonDeCommande(db.Model):
+    __tablename__ = 'bons_de_commande'
+    id                       = db.Column(db.Integer, primary_key=True)
+    numero                   = db.Column(db.Integer, unique=True, nullable=False)
+    date_creation            = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Type de bon : 'vehicule' ou 'garage'
+    type_bon                 = db.Column(db.String(32), default='vehicule', nullable=False)
+
+    # Demandeur
+    createur_id              = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    demandeur_nom            = db.Column(db.String(128), nullable=False)
+    service_departement      = db.Column(db.String(128))
+
+    # Fournisseur
+    fournisseur              = db.Column(db.String(128), nullable=True)
+
+    # Véhicule & Transporteur (uniquement si type_bon == 'vehicule')
+    vehicule_nom             = db.Column(db.String(64))   # ex: TG 433
+    vehicule_immatriculation = db.Column(db.String(64))   # ex: LH-819-AA
+    transporteur             = db.Column(db.String(128))  # Transporteur / Chauffeur concerné
+
+    # Observations générales
+    observations_generales   = db.Column(db.Text)
+
+    # Statut
+    statut                   = db.Column(db.String(32), default='en_attente', nullable=False)
+
+    # Validation DT
+    validateur_dt_id         = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    date_validation_dt       = db.Column(db.DateTime, nullable=True)
+    motif_refus_dt           = db.Column(db.Text, nullable=True)
+
+    # Livraison par le fournisseur au garage
+    date_livraison           = db.Column(db.DateTime, nullable=True)
+    receptionniste_id        = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Mise en stock
+    date_en_stock            = db.Column(db.DateTime, nullable=True)
+    magasinier_stock_id      = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Récupération par le transporteur
+    date_recuperation        = db.Column(db.DateTime, nullable=True)
+    nom_recuperateur         = db.Column(db.String(128), nullable=True)
+
+    # Clôture / Annulation
+    date_cloture             = db.Column(db.DateTime, nullable=True)
+    date_annulation          = db.Column(db.DateTime, nullable=True)
+    motif_annulation         = db.Column(db.Text, nullable=True)
+    annulateur_id            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Relations
+    lignes     = db.relationship('LigneBDC', backref='bon', lazy=True,
+                                  cascade='all, delete-orphan', order_by='LigneBDC.ordre')
+    historique = db.relationship('HistoriqueAction', backref='bon', lazy=True,
+                                  cascade='all, delete-orphan',
+                                  order_by='HistoriqueAction.timestamp.desc()')
+    receptionniste   = db.relationship('User', foreign_keys=[receptionniste_id])
+    magasinier_stock = db.relationship('User', foreign_keys=[magasinier_stock_id])
+    annulateur       = db.relationship('User', foreign_keys=[annulateur_id])
+
+    @property
+    def numero_affiche(self):
+        return f"{self.numero:04d}"
+
+    @property
+    def est_garage(self):
+        return self.type_bon == 'garage'
+
+    @property
+    def type_label(self):
+        return "Garage (Interne)" if self.est_garage else "Véhicule"
+
+    @property
+    def statut_label(self):
+        return STATUTS_BDC.get(self.statut, self.statut)
+
+    @property
+    def statut_couleur(self):
+        return STATUTS_COULEURS.get(self.statut, 'secondary')
+
+    @property
+    def pieces_recues(self):
+        return sum(1 for l in self.lignes if l.statut_reception == 'recu')
+
+    @property
+    def total_pieces(self):
+        return len(self.lignes)
+
+    def __repr__(self):
+        return f'<BDC N°{self.numero} [{self.statut}]>'
+
+
+# ─────────────────────────────────────────
+# LIGNES DU BON DE COMMANDE
+# ─────────────────────────────────────────
+class LigneBDC(db.Model):
+    __tablename__ = 'lignes_bdc'
+    id               = db.Column(db.Integer, primary_key=True)
+    bdc_id           = db.Column(db.Integer, db.ForeignKey('bons_de_commande.id'), nullable=False)
+    ordre            = db.Column(db.Integer, nullable=False)
+    designation      = db.Column(db.String(256), nullable=False)
+    quantite         = db.Column(db.Integer, nullable=False, default=1)
+    observations     = db.Column(db.String(256))
+    # Suivi réception
+    statut_reception = db.Column(db.String(32), default='non_recu')  # non_recu / recu / partiel
+    quantite_recue   = db.Column(db.Integer, default=0)
+    date_reception   = db.Column(db.DateTime, nullable=True)
+    note_reception   = db.Column(db.String(256))
+
+    @property
+    def statut_reception_label(self):
+        labels = {
+            'non_recu': 'Non reçu',
+            'recu':     'Reçu',
+            'partiel':  'Partiel',
+        }
+        return labels.get(self.statut_reception, self.statut_reception)
+
+    @property
+    def statut_reception_couleur(self):
+        couleurs = {
+            'non_recu': 'danger',
+            'recu':     'success',
+            'partiel':  'warning',
+        }
+        return couleurs.get(self.statut_reception, 'secondary')
+
+
+# ─────────────────────────────────────────
+# HISTORIQUE / JOURNAL D'AUDIT
+# ─────────────────────────────────────────
+class HistoriqueAction(db.Model):
+    __tablename__ = 'historique_actions'
+    id             = db.Column(db.Integer, primary_key=True)
+    bdc_id         = db.Column(db.Integer, db.ForeignKey('bons_de_commande.id'), nullable=False)
+    user_id        = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    timestamp      = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    type_action    = db.Column(db.String(64), nullable=False)
+    ancien_statut  = db.Column(db.String(32), nullable=True)
+    nouveau_statut = db.Column(db.String(32), nullable=True)
+    details        = db.Column(db.Text, nullable=True)
+
+    @property
+    def type_action_label(self):
+        labels = {
+            'creation':                  'Création',
+            'validation_dt':             'Validation DT',
+            'refus_validation':          'Refus DT',
+            'livraison':                 'Livrée (fournisseur)',
+            'mise_en_stock':             'Mise en stock',
+            'recuperation_transporteur': 'Récupérée par le transporteur',
+            'reception_piece':           'Réception pièce mise à jour',
+            'cloture':                   'Clôture',
+            'annulation':                'Annulation',
+            'modification':              'Modification',
+        }
+        return labels.get(self.type_action, self.type_action)
+
+    @property
+    def icone(self):
+        icones = {
+            'creation':                  'bi-plus-circle-fill text-primary',
+            'validation_dt':             'bi-check-circle-fill text-success',
+            'refus_validation':          'bi-x-circle-fill text-danger',
+            'livraison':                 'bi-box-seam-fill text-info',
+            'mise_en_stock':             'bi-archive-fill text-success',
+            'recuperation_transporteur': 'bi-truck text-purple',
+            'reception_piece':           'bi-check2-square text-warning',
+            'cloture':                   'bi-lock-fill text-secondary',
+            'annulation':                'bi-trash-fill text-dark',
+            'modification':              'bi-pencil-fill text-warning',
+        }
+        return icones.get(self.type_action, 'bi-circle-fill text-muted')
