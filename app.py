@@ -392,15 +392,11 @@ def create_app():
         bdc.statut = 'livree'
         bdc.date_livraison = datetime.now()
         bdc.receptionniste_id = current_user.id
-        for ligne in bdc.lignes:
-            if ligne.statut_reception == 'non_recu':
-                ligne.statut_reception = 'recu'
-                ligne.quantite_recue = ligne.quantite
-                ligne.date_reception = datetime.now()
+        # La réception reste décentralisée pièce par pièce sans forcer toutes les lignes
         enregistrer_action(bdc, 'livraison', ancien_statut=ancien, nouveau_statut='livree',
-                            details=f"Livraison par le fournisseur enregistrée par {current_user.nom_complet}")
+                            details=f"Statut général de commande passé à Livrée par {current_user.nom_complet}")
         db.session.commit()
-        flash(f'Livraison des pièces du bon N°{bdc.numero} enregistrée.', 'success')
+        flash(f'Statut global du bon N°{bdc.numero} passé à Livrée.', 'success')
         return redirect(url_for('bdc_view', id=id))
 
     # ─── MISE EN STOCK (MAGASIN) ──────────────────────────────────────────
@@ -520,6 +516,41 @@ def create_app():
                                     f"(par {current_user.nom_complet})")
         db.session.commit()
         flash(f'Réception de « {ligne.designation} » mise à jour avec succès.', 'success')
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── ACTION RAPIDE RÉCEPTION (LIVRÉ / NON LIVRÉ PAR PIÈCE) ────────────
+    @app.route('/bdc/<int:id>/reception_rapide/<int:ligne_id>/<string:action>', methods=['POST'])
+    @login_required
+    def bdc_reception_rapide(id, ligne_id, action):
+        if not peut_gerer_stock(current_user):
+            abort(403)
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        ligne = db.session.get(LigneBDC, ligne_id)
+        if not ligne or ligne.bdc_id != bdc.id:
+            abort(400)
+
+        if action == 'livre':
+            ligne.statut_reception = 'recu'
+            ligne.quantite_recue = ligne.quantite
+            ligne.date_reception = datetime.now()
+            if not ligne.livreur_nom:
+                ligne.livreur_nom = bdc.fournisseur or 'Fournisseur'
+            msg = f"Pièce « {ligne.designation} » marquée comme LIVRÉE ({ligne.quantite}/{ligne.quantite})."
+        elif action == 'non_recu':
+            ligne.statut_reception = 'non_recu'
+            ligne.quantite_recue = 0
+            ligne.date_reception = None
+            msg = f"Pièce « {ligne.designation} » marquée comme NON LIVRÉE."
+        else:
+            abort(400)
+
+        enregistrer_action(bdc, 'reception_piece',
+                            details=f"Pointage rapide pièce '{ligne.designation}' → {ligne.statut_reception_label} "
+                                    f"(par {current_user.nom_complet})")
+        db.session.commit()
+        flash(msg, 'success')
         return redirect(url_for('bdc_view', id=id))
 
     # ─── PDF ──────────────────────────────────────────────────────────────
