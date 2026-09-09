@@ -1,0 +1,6 @@
+﻿__pycache__/
+*.pyc
+*.log
+cloudflared.exe
+.cloudflared/
+instance/
