@@ -133,7 +133,7 @@ class BonDeCommande(db.Model):
     type_bon                 = db.Column(db.String(32), default='vehicule', nullable=False)
 
     # Demandeur
-    createur_id              = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    createur_id              = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     demandeur_nom            = db.Column(db.String(128), nullable=False)
     service_departement      = db.Column(db.String(128))
 
