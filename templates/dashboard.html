@@ -13,7 +13,7 @@
     <div class="mt-1 d-flex flex-wrap gap-2">
       {% for b in alertes_validation %}
         <a href="{{ url_for('bdc_view', id=b.id) }}" class="badge bg-warning text-dark text-decoration-none">
-          N°{{ b.numero }} — {{ b.vehicule_nom or '?' }} — {{ b.createur.nom_complet }}
+          N°{{ b.numero }} — {{ b.vehicule_nom or '?' }} — {{ b.createur.nom_complet if b.createur else b.demandeur_nom }}
         </a>
       {% endfor %}
     </div>
