@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>Tableau de bord{% endblock %}
+
+{% block content %}
+
+<!-- ── ALERTES VALIDATION ──────────────────────────────────────────────── -->
+{% if alertes_validation %}
+<div class="alert alert-warning border-warning d-flex align-items-start gap-3 mb-4">
+  <i class="bi bi-exclamation-triangle-fill fs-4 text-warning mt-1"></i>
+  <div>
+    <strong>{{ alertes_validation|length }} bon(s) en attente de votre validation :</strong>
+    <div class="mt-1 d-flex flex-wrap gap-2">
+      {% for b in alertes_validation %}
+        <a href="{{ url_for('bdc_view', id=b.id) }}" class="badge bg-warning text-dark text-decoration-none">
+          N°{{ b.numero }} — {{ b.vehicule_nom or '?' }} — {{ b.createur.nom_complet }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── KPI PÉRIODE ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  {% set kpi_list = [
+    ('Aujourd\'hui', stats.today, 'bi-sun', 'navy'),
+    ('Cette semaine', stats.week, 'bi-calendar-week', 'gold'),
+    ('Ce mois', stats.month, 'bi-calendar-month', 'teal'),
+    ('Cette année', stats.year, 'bi-calendar-year', 'purple'),
+  ] %}
+  {% for label, val, icon, color in kpi_list %}
+  <div class="col-6 col-md-3">
+    <div class="kpi-card kpi-{{ color }}">
+      <div class="kpi-icon"><i class="bi {{ icon }}"></i></div>
+      <div>
+        <div class="kpi-value">{{ val }}</div>
+        <div class="kpi-label">{{ label }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── KPI STATUTS ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  {% set statut_list = [
+    ('En attente', stats.en_attente, 'warning', 'bi-hourglass-split'),
+    ('Validées', stats.validee, 'primary', 'bi-check-circle'),
+    ('Refusées', stats.refusee, 'danger', 'bi-x-circle'),
+    ('Livrées', stats.livree, 'info', 'bi-box-seam-fill'),
+    ('En stock', stats.en_stock, 'success', 'bi-archive-fill'),
+    ('Récupérées par transporteur', stats.recuperee_transporteur, 'purple', 'bi-truck'),
+    ('Clôturées', stats.cloturee, 'secondary', 'bi-lock-fill'),
+    ('Annulées', stats.annulee, 'dark', 'bi-trash'),
+  ] %}
+  {% for label, val, color, icon in statut_list %}
+  <div class="col-6 col-md-3 col-xl-auto flex-grow-1">
+    <div class="stat-badge stat-{{ color }}">
+      <i class="bi {{ icon }} me-2"></i>
+      <span class="fw-bold">{{ val }}</span>
+      <span class="ms-1 small">{{ label }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── DERNIÈRES COMMANDES ─────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-clock-history me-2"></i>Dernières commandes
+    </h6>
+    <a href="{{ url_for('bdc_list') }}" class="btn btn-sm btn-outline-navy">
+      Voir tout <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if recents %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bdc mb-0">
+        <thead>
+          <tr>
+            <th>N° BON</th>
+            <th>Date</th>
+            <th>Demandeur</th>
+            <th>Véhicule</th>
+            <th>Transporteur</th>
+            <th>Pièces</th>
+            <th>Statut</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bdc in recents %}
+          <tr>
+            <td><span class="bdc-numero">{{ bdc.numero }}</span></td>
+            <td class="text-muted small">{{ bdc.date_creation.strftime('%d/%m/%Y') }}</td>
+            <td>{{ bdc.demandeur_nom }}</td>
+            <td>
+              {% if bdc.vehicule_nom %}
+                <span class="badge bg-light text-dark border">{{ bdc.vehicule_nom }}</span>
+                {% if bdc.vehicule_immatriculation %}
+                <span class="text-muted small ms-1">{{ bdc.vehicule_immatriculation }}</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ bdc.transporteur or '—' }}</td>
+            <td>
+              <span class="badge bg-light text-dark">{{ bdc.total_pieces }} pcs</span>
+            </td>
+            <td>
+              <span class="badge bg-{{ bdc.statut_couleur }}">{{ bdc.statut_label }}</span>
+            </td>
+            <td>
+              <a href="{{ url_for('bdc_view', id=bdc.id) }}"
+                 class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+      Aucun bon de commande pour le moment.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
