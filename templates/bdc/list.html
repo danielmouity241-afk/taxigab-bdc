@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Bons de commande — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-list-ul me-2"></i>Bons de commande{% endblock %}
+
+{% block content %}
+
+<!-- ── FILTRES ────────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom py-3">
+    <button class="btn btn-sm btn-outline-secondary w-100 text-start" data-bs-toggle="collapse"
+            data-bs-target="#filtres-panel">
+      <i class="bi bi-funnel me-2"></i><strong>Filtres de recherche</strong>
+      <i class="bi bi-chevron-down float-end mt-1"></i>
+    </button>
+  </div>
+  <div class="collapse {% if filtres.values()|select|list %}show{% endif %}" id="filtres-panel">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('bdc_list') }}" id="filter-form">
+        <div class="row g-3">
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">N° BON</label>
+            <input type="number" name="numero" class="form-control form-control-sm"
+                   placeholder="ex: 751" value="{{ filtres.numero }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Statut</label>
+            <select name="statut" class="form-select form-select-sm">
+              <option value="">Tous</option>
+              {% for key, label in statuts.items() %}
+              <option value="{{ key }}" {% if filtres.statut == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Transporteur</label>
+            <input type="text" name="transporteur" class="form-control form-control-sm"
+                   placeholder="Nom transporteur" value="{{ filtres.transporteur }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Fournisseur</label>
+            <input type="text" name="fournisseur" class="form-control form-control-sm"
+                   placeholder="Nom fournisseur" value="{{ filtres.fournisseur }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Véhicule / Immat.</label>
+            <input type="text" name="vehicule" class="form-control form-control-sm"
+                   placeholder="TG 433 / LH-819-AA" value="{{ filtres.vehicule }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Pièce</label>
+            <input type="text" name="piece" class="form-control form-control-sm"
+                   placeholder="Désignation pièce" value="{{ filtres.piece }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Créateur</label>
+            <input type="text" name="createur" class="form-control form-control-sm"
+                   placeholder="Nom créateur" value="{{ filtres.createur }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Date début</label>
+            <input type="date" name="date_debut" class="form-control form-control-sm"
+                   value="{{ filtres.date_debut }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Date fin</label>
+            <input type="date" name="date_fin" class="form-control form-control-sm"
+                   value="{{ filtres.date_fin }}">
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary-navy btn-sm">
+              <i class="bi bi-search me-1"></i> Rechercher
+            </button>
+            <a href="{{ url_for('bdc_list') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-x-circle me-1"></i> Réinitialiser
+            </a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── LISTE ──────────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-files me-2"></i>
+      {{ bons|length }} bon(s) trouvé(s)
+    </h6>
+    {% if current_user.role in ['DT', 'DTA', 'magasinier'] %}
+    <a href="{{ url_for('bdc_create') }}" class="btn btn-sm btn-primary-navy">
+      <i class="bi bi-plus-lg me-1"></i> Nouveau BDC
+    </a>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if bons %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bdc mb-0">
+        <thead>
+          <tr>
+            <th>N° BON</th>
+            <th>Date</th>
+            <th>Fournisseur</th>
+            <th>Demandeur</th>
+            <th>Véhicule</th>
+            <th>Transporteur</th>
+            <th>Pièces</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bdc in bons %}
+          <tr class="{% if bdc.statut == 'en_attente' and current_user.role == 'DT' %}table-warning-soft{% endif %}">
+            <td>
+              <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="bdc-numero font-monospace">{{ bdc.numero_affiche }}</a>
+              {% if bdc.est_garage %}
+              <div><span class="badge bg-success" style="font-size:0.65rem;">GARAGE</span></div>
+              {% endif %}
+            </td>
+            <td class="text-muted small">
+              {{ bdc.date_creation.strftime('%d/%m/%Y') }}<br>
+              <span class="text-muted" style="font-size:0.75rem;">{{ bdc.date_creation.strftime('%H:%M') }}</span>
+            </td>
+            <td><strong class="text-navy">{{ bdc.fournisseur or '—' }}</strong></td>
+            <td>
+              <div class="fw-semibold">{{ bdc.demandeur_nom }}</div>
+              <div class="text-muted small">{{ bdc.createur.role_label }}</div>
+            </td>
+            <td class="text-muted small">{{ bdc.service_departement or '—' }}</td>
+            <td>
+              {% if bdc.est_garage %}
+                <span class="badge bg-success-soft text-success border border-success small"><i class="bi bi-tools me-1"></i>Garage</span>
+              {% elif bdc.vehicule_nom %}
+                <span class="badge bg-navy-soft text-navy fw-semibold">{{ bdc.vehicule_nom }}</span><br>
+                <span class="text-muted small">{{ bdc.vehicule_immatriculation or '' }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if bdc.est_garage %}
+                <span class="text-muted small"><em>Interne</em></span>
+              {% else %}
+                {{ bdc.transporteur or '—' }}
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <span class="badge bg-light text-dark border" title="{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} reçues">
+                {{ bdc.total_pieces }} pcs
+              </span>
+              {% if bdc.statut in ['livree', 'cloturee'] %}
+              <br><small class="text-success">{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} reçues</small>
+              {% endif %}
+            </td>
+            <td><span class="badge bg-{{ bdc.statut_couleur }}">{{ bdc.statut_label }}</span></td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('bdc_view', id=bdc.id) }}"
+                   class="btn btn-sm btn-outline-secondary" title="Voir">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank"
+                   class="btn btn-sm btn-outline-danger" title="PDF">
+                  <i class="bi bi-file-pdf"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox fs-1 d-block mb-3 text-muted"></i>
+      <p class="mb-0">Aucun bon de commande ne correspond aux critères sélectionnés.</p>
+      {% if filtres.values()|select|list %}
+      <a href="{{ url_for('bdc_list') }}" class="btn btn-sm btn-outline-secondary mt-3">
+        <i class="bi bi-x-circle me-1"></i> Effacer les filtres
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
