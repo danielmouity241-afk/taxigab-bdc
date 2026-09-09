@@ -162,6 +162,20 @@ def test_workflow():
     assert b'Affectation :' not in res.data
     print("   [OK] Aucune mention de Affectation ou Flotte V\xc3\xa9hicule dans la page")
 
+    print("7. Test du tableau de bord (sans Refusé) et du modal d'avertissement Caution...")
+    res_dash = client.get('/dashboard')
+    assert res_dash.status_code == 200
+    assert b'Refus\xc3\xa9es' not in res_dash.data
+    assert b'Refus\xc3\xa9' not in res_dash.data
+    print("   [OK] Statut 'Refusé' complètement retiré du tableau de bord")
+
+    res_create = client.get('/bdc/nouveau')
+    assert res_create.status_code == 200
+    assert b'modal-avertissement-caution' in res_create.data
+    assert b'caution du transporteur' in res_create.data
+    assert b'btn-confirmer-caution' in res_create.data
+    print("   [OK] Modal d'avertissement rouge sur la caution du transporteur présent et actif")
+
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
     print("=======================================================")
