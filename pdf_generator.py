@@ -49,29 +49,35 @@ def _styles():
     return custom
 
 
-def generate_bdc_pdf(bdc, config):
+def generate_bdc_pdf(bdc, config, avec_reception=False):
     """
-    Génère le PDF d'un bon de commande.
+    Génère le PDF d' un bon de commande.
+    - Masque le fournisseur pour confidentialité vis-à-vis des transporteurs.
+    - Affiche le numéro de bon mensuel (ex: BDC-09/26-00001).
+    - Permet l'impression standard ou avec état de réception des pièces.
+    - Sur bon garage : signature FOURNISSEUR à gauche et DIRECTION TECHNIQUE à droite.
     Retourne un objet bytes du PDF.
     """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=1.5*cm, rightMargin=1.5*cm,
-        topMargin=1.5*cm, bottomMargin=2*cm,
-        title=f"Bon de Commande N°{bdc.numero}",
-        author="TAXI GAB+"
+        leftMargin=1.5*cm,
+        rightMargin=1.5*cm,
+        topMargin=1.2*cm,
+        bottomMargin=1.2*cm,
     )
 
+    page_width = A4[0] - 3*cm
     S = _styles()
     story = []
-    page_width = A4[0] - 3*cm  # Largeur utile
 
     # ── EN-TÊTE ───────────────────────────────────────────────────────────
     logo_path = config.LOGO_PATH
 
     titre_doc = "BON DE COMMANDE — GARAGE" if getattr(bdc, 'est_garage', False) else "BON DE COMMANDE"
+    if avec_reception:
+        titre_doc += " (ÉTAT RÉCEPTION)"
 
     if os.path.exists(logo_path):
         logo_img = Image(logo_path, width=4*cm, height=3*cm, kind='proportional')
@@ -87,8 +93,8 @@ def generate_bdc_pdf(bdc, config):
             ''
         ]]
 
-    # Numéro formaté à 4 chiffres (0001, 0002...) et date
-    num_str = f"{bdc.numero:04d}" if hasattr(bdc, 'numero') else str(bdc.numero)
+    # Numéro officiel mensuel (ex: BDC-09/26-00001) et date
+    num_str = bdc.numero_affiche if hasattr(bdc, 'numero_affiche') else f"{bdc.numero:05d}"
     numero_date_data = [
         [Paragraph(f"<b>N° BON :</b> {num_str}", S['label']),
          Paragraph(f"<b>DATE :</b> {bdc.date_creation.strftime('%d/%m/%Y')}", S['label'])],
@@ -114,7 +120,7 @@ def generate_bdc_pdf(bdc, config):
     story.append(numero_date_table)
     story.append(Spacer(1, 6*mm))
 
-    # ── SECTION : INFORMATIONS DU DEMANDEUR ──────────────────────────────
+    # ── SECTION : INFORMATIONS DU DEMANDEUR (FOURNISSEUR MASQUÉ SUR PDF) ──
     section_header = Table(
         [[Paragraph("INFORMATIONS DE LA COMMANDE", S['section_title'])]],
         colWidths=[page_width]
@@ -129,29 +135,29 @@ def generate_bdc_pdf(bdc, config):
 
     if getattr(bdc, 'est_garage', False):
         demandeur_data = [
-            [Paragraph("<b>Fournisseur :</b>", S['label']),
-             Paragraph(bdc.fournisseur or '—', S['value']),
-             Paragraph("<b>Demandeur :</b>", S['label']),
-             Paragraph(bdc.demandeur_nom or '—', S['value'])],
-            [Paragraph("<b>Affectation :</b>", S['label']),
-             Paragraph("<b>GARAGE (Usage interne atelier)</b>", S['value']),
-             Paragraph("<b>Service / Département :</b>", S['label']),
-             Paragraph(bdc.service_departement or '—', S['value'])],
+            [Paragraph("<b>Demandeur :</b>", S['label']),
+             Paragraph(bdc.demandeur_nom or '—', S['value']),
+             Paragraph("<b>Affectation :</b>", S['label']),
+             Paragraph("<b>GARAGE (Usage interne atelier)</b>", S['value'])],
+            [Paragraph("<b>Service / Département :</b>", S['label']),
+             Paragraph(bdc.service_departement or '—', S['value']),
+             Paragraph("<b>Type :</b>", S['label']),
+             Paragraph("Bon de commande interne", S['value'])],
         ]
     else:
         demandeur_data = [
-            [Paragraph("<b>Fournisseur :</b>", S['label']),
-             Paragraph(bdc.fournisseur or '—', S['value']),
-             Paragraph("<b>Demandeur :</b>", S['label']),
-             Paragraph(bdc.demandeur_nom or '—', S['value'])],
+            [Paragraph("<b>Demandeur :</b>", S['label']),
+             Paragraph(bdc.demandeur_nom or '—', S['value']),
+             Paragraph("<b>Département :</b>", S['label']),
+             Paragraph(bdc.service_departement or '—', S['value'])],
             [Paragraph("<b>Véhicule concerné :</b>", S['label']),
              Paragraph(bdc.vehicule_nom or '—', S['value']),
              Paragraph("<b>Immatriculation :</b>", S['label']),
              Paragraph(bdc.vehicule_immatriculation or '—', S['value'])],
             [Paragraph("<b>Transporteur :</b>", S['label']),
              Paragraph(bdc.transporteur or '—', S['value']),
-             Paragraph("<b>Département :</b>", S['label']),
-             Paragraph(bdc.service_departement or '—', S['value'])],
+             Paragraph("<b>Affectation :</b>", S['label']),
+             Paragraph("Flotte Véhicule", S['value'])],
         ]
     demandeur_table = Table(demandeur_data, colWidths=[3.5*cm, page_width*0.35, 3.5*cm, page_width*0.25])
     demandeur_table.setStyle(TableStyle([
@@ -163,11 +169,12 @@ def generate_bdc_pdf(bdc, config):
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
     story.append(demandeur_table)
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 6*mm))
 
     # ── SECTION : MATÉRIAUX DEMANDÉS ─────────────────────────────────────
+    sec_titre2 = "MATÉRIAUX DEMANDÉS & ÉTAT DE RÉCEPTION" if avec_reception else "MATÉRIAUX DEMANDÉS"
     section_header2 = Table(
-        [[Paragraph("MATÉRIAUX DEMANDÉS", S['section_title'])]],
+        [[Paragraph(sec_titre2, S['section_title'])]],
         colWidths=[page_width]
     )
     section_header2.setStyle(TableStyle([
@@ -179,28 +186,57 @@ def generate_bdc_pdf(bdc, config):
     story.append(section_header2)
 
     # En-tête du tableau des pièces
-    mat_col_widths = [1.2*cm, page_width - 1.2*cm - 2.5*cm - 5*cm, 2.5*cm, 5*cm]
-    mat_header = [[
-        Paragraph("<b>N°</b>", S['label']),
-        Paragraph("<b>DÉSIGNATION</b>", S['label']),
-        Paragraph("<b>QTÉ</b>", S['label']),
-        Paragraph("<b>OBSERVATIONS</b>", S['label']),
-    ]]
-    mat_rows = list(mat_header)
+    if avec_reception:
+        # Colonnes avec état de réception : N° / Désignation / Qté cmd / Reçu / Statut
+        mat_col_widths = [1.2*cm, page_width - 1.2*cm - 2.2*cm - 2.2*cm - 4.5*cm, 2.2*cm, 2.2*cm, 4.5*cm]
+        mat_header = [[
+            Paragraph("<b>N°</b>", S['label']),
+            Paragraph("<b>DÉSIGNATION</b>", S['label']),
+            Paragraph("<b>QTÉ CMD</b>", S['label']),
+            Paragraph("<b>QTÉ RECUE</b>", S['label']),
+            Paragraph("<b>ÉTAT RÉCEPTION</b>", S['label']),
+        ]]
+        mat_rows = list(mat_header)
+        for i, ligne in enumerate(bdc.lignes, 1):
+            if ligne.statut_reception == 'recu':
+                etat_str = f"<font color='#198754'><b>LIVRÉE ({ligne.quantite_recue}/{ligne.quantite})</b></font>"
+            elif ligne.statut_reception == 'partiel':
+                etat_str = f"<font color='#d97706'><b>PARTIEL ({ligne.quantite_recue or 0}/{ligne.quantite})</b></font>"
+            else:
+                etat_str = "<font color='#dc3545'><b>NON LIVRÉE</b></font>"
 
-    for i, ligne in enumerate(bdc.lignes, 1):
-        row = [
-            Paragraph(str(i), S['value']),
-            Paragraph(ligne.designation or '', S['value']),
-            Paragraph(str(ligne.quantite), S['value']),
-            Paragraph(ligne.observations or '', S['value']),
-        ]
-        mat_rows.append(row)
+            row = [
+                Paragraph(str(i), S['value']),
+                Paragraph(ligne.designation or '', S['value']),
+                Paragraph(str(ligne.quantite), S['value']),
+                Paragraph(str(ligne.quantite_recue or 0), S['value']),
+                Paragraph(etat_str, S['value']),
+            ]
+            mat_rows.append(row)
+    else:
+        # Tableau standard
+        mat_col_widths = [1.2*cm, page_width - 1.2*cm - 2.5*cm - 5*cm, 2.5*cm, 5*cm]
+        mat_header = [[
+            Paragraph("<b>N°</b>", S['label']),
+            Paragraph("<b>DÉSIGNATION</b>", S['label']),
+            Paragraph("<b>QTÉ</b>", S['label']),
+            Paragraph("<b>OBSERVATIONS</b>", S['label']),
+        ]]
+        mat_rows = list(mat_header)
+        for i, ligne in enumerate(bdc.lignes, 1):
+            row = [
+                Paragraph(str(i), S['value']),
+                Paragraph(ligne.designation or '', S['value']),
+                Paragraph(str(ligne.quantite), S['value']),
+                Paragraph(ligne.observations or '', S['value']),
+            ]
+            mat_rows.append(row)
 
     # Lignes vides pour remplissage (minimum 8 lignes au total)
-    min_rows = 10
+    min_rows = 8
+    col_count = 5 if avec_reception else 4
     while len(mat_rows) < min_rows + 1:
-        mat_rows.append(['', '', '', ''])
+        mat_rows.append([''] * col_count)
 
     mat_table = Table(mat_rows, colWidths=mat_col_widths, rowHeights=[0.7*cm] + [0.65*cm]*(len(mat_rows)-1))
     mat_style = TableStyle([
@@ -243,17 +279,17 @@ def generate_bdc_pdf(bdc, config):
     obs_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), WHITE),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 30),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 24),
         ('LEFTPADDING', (0,0), (-1,-1), 8),
     ]))
     story.append(obs_table)
-    story.append(Spacer(1, 8*mm))
+    story.append(Spacer(1, 6*mm))
 
     # ── SECTION : SIGNATURES ─────────────────────────────────────────────
     if getattr(bdc, 'est_garage', False):
-        titre_gauche = "DEMANDEUR / MAGASINIER"
-        sub_gauche = "Signature & Date"
+        titre_gauche = "FOURNISSEUR"
+        sub_gauche = "Signature"
     else:
         titre_gauche = "TRANSPORTEUR / CHAUFFEUR"
         sub_gauche = "Signature"
@@ -273,7 +309,7 @@ def generate_bdc_pdf(bdc, config):
     ]]
     sign_table = Table(sign_data,
                        colWidths=[page_width*0.5, page_width*0.5],
-                       rowHeights=[0.7*cm, 0.5*cm, 1.5*cm, 1*cm, 0.3*cm])
+                       rowHeights=[0.7*cm, 0.5*cm, 1.4*cm, 0.8*cm, 0.2*cm])
     sign_table.setStyle(TableStyle([
         ('BOX', (0,0), (0,-1), 0.5, colors.HexColor('#cccccc')),
         ('BOX', (1,0), (1,-1), 0.5, colors.HexColor('#cccccc')),
