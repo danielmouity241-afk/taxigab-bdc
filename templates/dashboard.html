@@ -21,16 +21,17 @@
 </div>
 {% endif %}
 
-<!-- ── KPI PÉRIODE ─────────────────────────────────────────────────────── -->
+<!-- ── KPI PÉRIODE & SYNTHÈSE ─────────────────────────────────────── -->
 <div class="row g-3 mb-4">
   {% set kpi_list = [
     ('Aujourd\'hui', stats.today, 'bi-sun', 'navy'),
     ('Cette semaine', stats.week, 'bi-calendar-week', 'gold'),
     ('Ce mois', stats.month, 'bi-calendar-month', 'teal'),
     ('Cette année', stats.year, 'bi-calendar-year', 'purple'),
+    ('Bons Annulés', stats.annulee, 'bi-trash-fill', 'danger'),
   ] %}
   {% for label, val, icon, color in kpi_list %}
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-4 col-xl">
     <div class="kpi-card kpi-{{ color }}">
       <div class="kpi-icon"><i class="bi {{ icon }}"></i></div>
       <div>
@@ -49,9 +50,9 @@
     ('Validées', stats.validee, 'primary', 'bi-check-circle'),
     ('Livrées', stats.livree, 'info', 'bi-box-seam-fill'),
     ('En stock', stats.en_stock, 'success', 'bi-archive-fill'),
-    ('Récupérées par transporteur', stats.recuperee_transporteur, 'purple', 'bi-truck'),
+    ('Récupérées transporteur', stats.recuperee_transporteur, 'purple', 'bi-truck'),
     ('Clôturées', stats.cloturee, 'secondary', 'bi-lock-fill'),
-    ('Annulées', stats.annulee, 'dark', 'bi-trash'),
+    ('Bons Annulés', stats.annulee, 'danger', 'bi-trash3-fill'),
   ] %}
   {% for label, val, color, icon in statut_list %}
   <div class="col-6 col-md-3 col-xl-auto flex-grow-1">
