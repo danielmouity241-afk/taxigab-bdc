@@ -106,11 +106,15 @@ body {
 .kpi-gold  { border-left-color: var(--gold); }
 .kpi-teal  { border-left-color: #0d9488; }
 .kpi-purple{ border-left-color: #7c3aed; }
+.kpi-danger{ border-left-color: #dc3545; }
+.kpi-dark  { border-left-color: #212529; }
 .kpi-icon  { font-size: 1.8rem; opacity: 0.7; }
 .kpi-navy .kpi-icon  { color: var(--navy); }
 .kpi-gold .kpi-icon  { color: var(--gold); }
 .kpi-teal .kpi-icon  { color: #0d9488; }
 .kpi-purple .kpi-icon{ color: #7c3aed; }
+.kpi-danger .kpi-icon{ color: #dc3545; }
+.kpi-dark .kpi-icon  { color: #212529; }
 .kpi-value { font-size: 1.8rem; font-weight: 700; line-height: 1; color: var(--navy); }
 .kpi-label { font-size: 0.75rem; color: #666; margin-top: 2px; }
 
