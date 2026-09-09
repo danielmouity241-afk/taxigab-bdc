@@ -131,7 +131,8 @@ class BonDeCommande(db.Model):
 
     @property
     def numero_affiche(self):
-        return f"{self.numero:04d}"
+        date_ref = self.date_creation or datetime.utcnow()
+        return f"BDC-{date_ref.strftime('%m/%y')}-{self.numero:05d}"
 
     @property
     def est_garage(self):
@@ -158,7 +159,7 @@ class BonDeCommande(db.Model):
         return len(self.lignes)
 
     def __repr__(self):
-        return f'<BDC N°{self.numero} [{self.statut}]>'
+        return f'<BDC N°{self.numero_affiche} [{self.statut}]>'
 
 
 # ─────────────────────────────────────────
@@ -172,7 +173,8 @@ class LigneBDC(db.Model):
     designation      = db.Column(db.String(256), nullable=False)
     quantite         = db.Column(db.Integer, nullable=False, default=1)
     observations     = db.Column(db.String(256))
-    # Suivi réception
+    # Suivi réception & livraison
+    livreur_nom      = db.Column(db.String(128), nullable=True)  # Sous-traitant ou fournisseur livreur effectif
     statut_reception = db.Column(db.String(32), default='non_recu')  # non_recu / recu / partiel
     quantite_recue   = db.Column(db.Integer, default=0)
     date_reception   = db.Column(db.DateTime, nullable=True)
