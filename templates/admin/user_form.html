@@ -153,12 +153,12 @@
               <div class="p-3 border rounded h-100 bg-white shadow-xs">
                 <div class="form-check form-switch">
                   <input class="form-check-input perm-action" type="checkbox" name="peut_recuperer" id="perm-recup"
-                         {% if user and (user.peut_recuperer or user.role in ['DT', 'DTA', 'magasinier', 'transporteur']) and not user.est_spectateur %}checked{% endif %}>
+                         {% if user and (user.peut_recuperer or (user.can_recuperer and not user.est_spectateur)) %}checked{% endif %}>
                   <label class="form-check-label fw-semibold" for="perm-recup">
-                    <i class="bi bi-truck text-purple me-1"></i> Valider récupération transporteur
+                    <i class="bi bi-truck text-purple me-1"></i> Remise au transporteur (Prise en charge)
                   </label>
                 </div>
-                <div class="small text-muted mt-1">Enregistrer la prise en charge du bon par le chauffeur.</div>
+                <div class="small text-muted mt-1">Enregistrer la remise du bon et des pièces au transporteur.</div>
               </div>
             </div>
 
