@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Suivi des réceptions — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-box-seam me-2"></i>Suivi des réceptions{% endblock %}
+
+{% block content %}
+
+<!-- ── FILTRES ────────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body py-3">
+    <form method="GET" action="{{ url_for('suivi') }}" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Véhicule / Immatriculation</label>
+        <input type="text" name="vehicule" class="form-control form-control-sm"
+               placeholder="ex: TG 433" value="{{ filtres.vehicule }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Transporteur</label>
+        <input type="text" name="transporteur" class="form-control form-control-sm"
+               placeholder="Nom transporteur" value="{{ filtres.transporteur }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Statut réception</label>
+        <select name="statut_reception" class="form-select form-select-sm">
+          <option value="">Tous</option>
+          <option value="non_recu" {% if filtres.statut_reception == 'non_recu' %}selected{% endif %}>Non reçu</option>
+          <option value="recu" {% if filtres.statut_reception == 'recu' %}selected{% endif %}>Reçu</option>
+          <option value="partiel" {% if filtres.statut_reception == 'partiel' %}selected{% endif %}>Partiel</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary-navy btn-sm flex-grow-1">
+          <i class="bi bi-search me-1"></i>Filtrer
+        </button>
+        <a href="{{ url_for('suivi') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── RÉSULTATS ───────────────────────────────────────────────────────── -->
+{% if bons %}
+{% for bdc in bons %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="bdc-numero">N°{{ bdc.numero }}</a>
+      <span class="badge bg-{{ bdc.statut_couleur }}">{{ bdc.statut_label }}</span>
+      {% if bdc.vehicule_nom %}
+      <span class="badge bg-navy-soft text-navy">{{ bdc.vehicule_nom }}</span>
+      {% endif %}
+      {% if bdc.vehicule_immatriculation %}
+      <span class="text-muted small">{{ bdc.vehicule_immatriculation }}</span>
+      {% endif %}
+    </div>
+    <div class="text-muted small">
+      {{ bdc.date_creation.strftime('%d/%m/%Y') }} &bull;
+      {{ bdc.transporteur or 'Transporteur non spécifié' }} &bull;
+      <strong>{{ bdc.pieces_recues }}/{{ bdc.total_pieces }}</strong> pièces reçues
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:50px;" class="text-center">N°</th>
+            <th>Désignation</th>
+            <th class="text-center" style="width:80px;">Qté cmd.</th>
+            <th class="text-center" style="width:80px;">Qté reçue</th>
+            <th class="text-center" style="width:120px;">Statut réception</th>
+            <th>Note</th>
+            <th class="text-center" style="width:120px;">Date réception</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ligne in bdc.lignes %}
+          <tr class="{% if ligne.statut_reception == 'non_recu' %}table-danger-soft{% elif ligne.statut_reception == 'recu' %}table-success-soft{% elif ligne.statut_reception == 'partiel' %}table-warning-soft{% endif %}">
+            <td class="text-center align-middle">{{ loop.index }}</td>
+            <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
+            <td class="text-center align-middle">{{ ligne.quantite }}</td>
+            <td class="text-center align-middle">
+              {% if ligne.quantite_recue %}{{ ligne.quantite_recue }}{% else %}—{% endif %}
+            </td>
+            <td class="text-center align-middle">
+              <span class="badge bg-{{ ligne.statut_reception_couleur }}">
+                {{ ligne.statut_reception_label }}
+              </span>
+            </td>
+            <td class="align-middle text-muted small">{{ ligne.note_reception or '—' }}</td>
+            <td class="text-center align-middle small text-muted">
+              {% if ligne.date_reception %}
+                {{ ligne.date_reception.strftime('%d/%m/%Y') }}<br>
+                {{ ligne.date_reception.strftime('%H:%M') }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
+    <div class="progress flex-grow-1 me-3" style="height:10px;">
+      {% set pct = (bdc.pieces_recues / bdc.total_pieces * 100) if bdc.total_pieces > 0 else 0 %}
+      <div class="progress-bar bg-success" style="width:{{ pct|round }}%"
+           title="{{ pct|round }}% reçu"></div>
+    </div>
+    <span class="small text-muted">{{ pct|round }}% reçu</span>
+    <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="btn btn-sm btn-outline-navy ms-3">
+      <i class="bi bi-pencil me-1"></i>Mettre à jour
+    </a>
+  </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-box-seam fs-1 d-block mb-3"></i>
+    <p>Aucun bon de commande en cours de suivi de réception.</p>
+    <small>Seuls les bons avec statut <strong>Acceptée</strong> ou <strong>Livrée</strong> apparaissent ici.</small>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
