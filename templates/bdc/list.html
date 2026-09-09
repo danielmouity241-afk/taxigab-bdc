@@ -126,7 +126,7 @@
             <td><strong class="text-navy">{{ bdc.fournisseur or '—' }}</strong></td>
             <td>
               <div class="fw-semibold">{{ bdc.demandeur_nom }}</div>
-              <div class="text-muted small">{{ bdc.service_departement or bdc.createur.role_label }}</div>
+              <div class="text-muted small">{{ bdc.service_departement or (bdc.createur.role_label if bdc.createur else '') }}</div>
             </td>
             <td>
               {% if bdc.est_garage %}
