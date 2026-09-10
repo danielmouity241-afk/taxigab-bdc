@@ -188,6 +188,32 @@
               </div>
             </div>
 
+            <div class="col-md-6">
+              <div class="p-3 border rounded h-100 bg-white shadow-xs">
+                <div class="form-check form-switch">
+                  <input class="form-check-input perm-action" type="checkbox" name="peut_voir_historique" id="perm-hist"
+                         {% if user and (user.peut_voir_historique or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm-hist">
+                    <i class="bi bi-clock-history text-info me-1"></i> Accès à l'Historique & Traçabilité
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Consulter le journal chronologique et la traçabilité des bons.</div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="p-3 border rounded h-100 bg-white shadow-xs">
+                <div class="form-check form-switch">
+                  <input class="form-check-input perm-action" type="checkbox" name="peut_voir_archives" id="perm-arch"
+                         {% if user and (user.peut_voir_archives or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm-arch">
+                    <i class="bi bi-archive text-warning me-1"></i> Accès aux Archives Mensuelles
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Consulter les dossiers et historiques indépendants archivés chaque fin de mois.</div>
+              </div>
+            </div>
+
             <div class="col-12">
               <div class="p-3 border rounded bg-white shadow-xs border-primary-subtle">
                 <div class="form-check form-switch">
