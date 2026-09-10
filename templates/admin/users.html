@@ -66,6 +66,12 @@
                   {% if user.peut_annuler or user.role in ['DT', 'DTA'] %}
                     <span class="badge bg-danger-soft text-danger border" title="Peut annuler">Annulation</span>
                   {% endif %}
+                  {% if user.peut_voir_historique or (user.can_voir_historique and not user.est_spectateur) %}
+                    <span class="badge bg-info-soft text-info border" title="Peut consulter l'historique"><i class="bi bi-clock-history me-1"></i>Historique</span>
+                  {% endif %}
+                  {% if user.peut_voir_archives or (user.can_voir_archives and not user.est_spectateur) %}
+                    <span class="badge bg-warning-soft text-dark border" title="Peut consulter les archives"><i class="bi bi-archive me-1"></i>Archives</span>
+                  {% endif %}
                   {% if user.peut_gerer_utilisateurs or user.role == 'DT' %}
                     <span class="badge bg-dark text-white border" title="Administrateur des comptes">Admin</span>
                   {% endif %}
