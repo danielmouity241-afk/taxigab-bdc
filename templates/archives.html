@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Archives Mensuelles — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-archive me-2"></i>Archives Mensuelles des Bons de Commande{% endblock %}
+
+{% block content %}
+
+<!-- ── SÉLECTEUR DE MOIS INDÉPENDANT & FILTRES ─────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h6 class="mb-0 fw-bold text-navy">
+        <i class="bi bi-folder-check me-2"></i>Archive du mois : 
+        <span class="text-primary">{{ selected_mois.split('-')[1] }}/{{ selected_mois.split('-')[0] }}</span>
+      </h6>
+      <small class="text-muted">Chaque dossier mensuel est autonome et conserve l'état et l'historique complet des bons.</small>
+    </div>
+    <div class="badge bg-light text-navy border px-3 py-2 fs-7">
+      <i class="bi bi-database-check me-1 text-success"></i>Dossier archivé indépendant
+    </div>
+  </div>
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('archives') }}" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Dossier Mensuel</label>
+        <select name="mois" class="form-select form-select-sm fw-bold">
+          {% for m in mois_disponibles %}
+          <option value="{{ m }}" {% if selected_mois == m %}selected{% endif %}>
+            📁 {{ m }} ({{ m.split('-')[1] }}/{{ m.split('-')[0] }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">N° de Bon</label>
+        <input type="number" name="numero" class="form-control form-control-sm"
+               placeholder="ex: 1, 2..." value="{{ filtres.numero }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Date exacte</label>
+        <input type="date" name="date" class="form-control form-control-sm" value="{{ filtres.date }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Statut final</label>
+        <select name="statut" class="form-select form-select-sm">
+          <option value="">Tous les statuts</option>
+          <option value="cloturee" {% if filtres.statut == 'cloturee' %}selected{% endif %}>Clôturé</option>
+          <option value="en_stock" {% if filtres.statut == 'en_stock' %}selected{% endif %}>En stock</option>
+          <option value="recuperee_transporteur" {% if filtres.statut == 'recuperee_transporteur' %}selected{% endif %}>Récupérée par le transporteur</option>
+          <option value="validee" {% if filtres.statut == 'validee' %}selected{% endif %}>Validé DT</option>
+          <option value="annulee" {% if filtres.statut == 'annulee' %}selected{% endif %}>Annulé</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary-navy btn-sm w-100 fw-semibold">
+          <i class="bi bi-search me-1"></i> Ouvrir
+        </button>
+        <a href="{{ url_for('archives') }}" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
+          <i class="bi bi-arrow-counterclockwise"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── RÉCAPITULATIF DU MOIS ARCHIVÉ ───────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card kpi-navy p-3">
+      <div class="kpi-icon"><i class="bi bi-files"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.total_bons }}</div>
+        <div class="kpi-label">Total bons du mois</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card kpi-gold p-3">
+      <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.total_pieces }}</div>
+        <div class="kpi-label">Total pièces</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card kpi-teal p-3">
+      <div class="kpi-icon"><i class="bi bi-check-circle"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.en_stock }}</div>
+        <div class="kpi-label">En stock</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card kpi-purple p-3">
+      <div class="kpi-icon"><i class="bi bi-truck"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.recuperees }}</div>
+        <div class="kpi-label">Remis transporteur</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card p-3" style="border-left: 4px solid #6c757d;">
+      <div class="kpi-icon"><i class="bi bi-lock-fill text-secondary"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.clotures }}</div>
+        <div class="kpi-label">Bons clôturés</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 col-sm-4">
+    <div class="kpi-card kpi-dark p-3">
+      <div class="kpi-icon"><i class="bi bi-x-circle text-dark"></i></div>
+      <div>
+        <div class="kpi-value fs-4">{{ stats_archive.annulees }}</div>
+        <div class="kpi-label">Bons annulés</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TABLEAU DES BONS DE COMMANDE ARCHIVÉS ────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-archive-fill me-2 text-warning"></i>
+      Dossier d'archives : {{ bons|length }} bon(s) répertorié(s) pour {{ selected_mois }}
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    {% if bons %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bdc mb-0">
+        <thead>
+          <tr>
+            <th>N° BON</th>
+            <th>Date d'émission</th>
+            <th>Type</th>
+            <th>Véhicule / Affectation</th>
+            <th>Demandeur</th>
+            <th>Statut</th>
+            <th>Pièces</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bon in bons %}
+          <tr>
+            <td>
+              <a href="{{ url_for('bdc_view', id=bon.id) }}" class="bdc-numero fw-bold text-navy">
+                {{ bon.numero_complet }}
+              </a>
+            </td>
+            <td class="small text-muted">
+              <i class="bi bi-calendar3 me-1"></i>{{ bon.date_creation.strftime('%d/%m/%Y') }}
+            </td>
+            <td>
+              {% if bon.est_garage %}
+                <span class="badge bg-secondary"><i class="bi bi-wrench me-1"></i>Garage</span>
+              {% else %}
+                <span class="badge bg-navy"><i class="bi bi-car-front me-1"></i>Véhicule</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if bon.est_garage %}
+                <span class="text-muted small">Usage interne garage</span>
+              {% else %}
+                <strong>{{ bon.vehicule_nom or '—' }}</strong>
+                {% if bon.vehicule_immatriculation %}<small class="text-muted ms-1">({{ bon.vehicule_immatriculation }})</small>{% endif %}
+              {% endif %}
+            </td>
+            <td class="small">{{ bon.demandeur_nom }}</td>
+            <td>
+              <span class="badge bg-{{ bon.statut_couleur }}">
+                {{ bon.statut_label }}
+              </span>
+            </td>
+            <td>
+              <span class="badge bg-light text-dark border">{{ bon.total_pieces }} pièce(s)</span>
+            </td>
+            <td class="text-end">
+              <div class="d-flex gap-1 justify-content-end">
+                <a href="{{ url_for('bdc_view', id=bon.id) }}" class="btn btn-sm btn-outline-primary" title="Consulter le dossier archivé">
+                  <i class="bi bi-eye"></i> Consulter
+                </a>
+                <a href="{{ url_for('bdc_pdf', id=bon.id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Imprimer le bon PDF">
+                  <i class="bi bi-file-pdf"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+      <h5>Aucun bon trouvé dans l'archive pour {{ selected_mois }}</h5>
+      <p class="small">Modifiez la période ou les filtres pour consulter d'autres archives.</p>
+      <a href="{{ url_for('archives') }}" class="btn btn-sm btn-outline-secondary">
+        Revenir au dernier dossier
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
