@@ -7,7 +7,7 @@ from flask import (Flask, render_template, redirect, url_for, request,
                    flash, abort, send_file, jsonify)
 from flask_login import (LoginManager, login_user, logout_user,
                           login_required, current_user)
-from sqlalchemy import or_, and_, func, extract
+from sqlalchemy import or_, and_, func, extract, cast
 import io
 
 from config import Config
@@ -98,6 +98,16 @@ def create_app():
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
             return False
         return bool(getattr(user, 'peut_gerer_utilisateurs', False) or user.role == 'DT')
+
+    def peut_voir_historique(user):
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        return bool(getattr(user, 'can_voir_historique', False))
+
+    def peut_voir_archives(user):
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        return bool(getattr(user, 'can_voir_archives', False))
 
     @app.context_processor
     def inject_globals():
@@ -659,54 +669,157 @@ def create_app():
                                bons=bons,
                                stats_fournisseurs=stats_fournisseurs)
 
-    # ─── HISTORIQUE GÉNÉRAL ───────────────────────────────────────────────
+    # ─── HISTORIQUE DU MOIS EN COURS (GROUPÉ PAR BON) ─────────────────────
     @app.route('/historique')
     @login_required
     def historique():
-        q = HistoriqueAction.query.join(BonDeCommande)
+        if not peut_voir_historique(current_user):
+            abort(403)
 
-        f_numero      = request.args.get('numero', '')
-        f_action      = request.args.get('action', '')
-        f_user        = request.args.get('user', '')
-        f_fournisseur = request.args.get('fournisseur', '')
-        f_date_debut  = request.args.get('date_debut', '')
-        f_date_fin    = request.args.get('date_fin', '')
+        now = datetime.utcnow()
+        # Par défaut : mois en cours
+        selected_mois = request.args.get('mois', now.strftime('%Y-%m'))
+        f_numero      = request.args.get('numero', '').strip()
+        f_user        = request.args.get('user', '').strip()
+        f_action      = request.args.get('action', '').strip()
+
+        # Calcul de la plage de date du mois sélectionné
+        try:
+            annee, mois = map(int, selected_mois.split('-'))
+            debut_mois = datetime(annee, mois, 1)
+            if mois == 12:
+                fin_mois = datetime(annee + 1, 1, 1)
+            else:
+                fin_mois = datetime(annee, mois + 1, 1)
+        except Exception:
+            annee, mois = now.year, now.month
+            selected_mois = now.strftime('%Y-%m')
+            debut_mois = datetime(annee, mois, 1)
+            fin_mois = datetime(annee + 1, 1, 1) if mois == 12 else datetime(annee, mois + 1, 1)
+
+        # Récupérer les actions du mois
+        q_act = HistoriqueAction.query.join(BonDeCommande).filter(
+            HistoriqueAction.timestamp >= debut_mois,
+            HistoriqueAction.timestamp < fin_mois
+        )
+
+        if f_numero:
+            try:
+                q_act = q_act.filter(BonDeCommande.numero == int(f_numero))
+            except ValueError:
+                pass
+        if f_action:
+            q_act = q_act.filter(HistoriqueAction.type_action == f_action)
+        if f_user:
+            q_act = q_act.join(User, HistoriqueAction.user_id == User.id).filter(
+                User.nom_complet.ilike(f'%{f_user}%'))
+
+        actions = q_act.order_by(HistoriqueAction.timestamp.desc()).all()
+
+        # Regrouper les actions par Bon de Commande
+        # On extrait la liste des bons concernés
+        bons_dict = {}
+        for act in actions:
+            bid = act.bdc_id
+            if bid not in bons_dict:
+                bons_dict[bid] = {
+                    'bon': act.bon,
+                    'actions': [],
+                    'derniere_action': act.timestamp
+                }
+            bons_dict[bid]['actions'].append(act)
+
+        # Trier les bons par dernière activité descendante
+        bons_groupes = sorted(bons_dict.values(), key=lambda x: x['derniere_action'], reverse=True)
+
+        # Mois disponibles dans l'historique
+        dates_raw = db.session.query(HistoriqueAction.timestamp).order_by(HistoriqueAction.timestamp.desc()).all()
+        mois_disponibles = sorted(list({d[0].strftime('%Y-%m') for d in dates_raw if d[0]}), reverse=True)
+        if selected_mois not in mois_disponibles:
+            mois_disponibles.insert(0, selected_mois)
+
+        types_actions = db.session.query(HistoriqueAction.type_action).distinct().all()
+        types_actions = [t[0] for t in types_actions]
+
+        return render_template('history.html',
+                               bons_groupes=bons_groupes,
+                               selected_mois=selected_mois,
+                               mois_disponibles=mois_disponibles,
+                               types_actions=types_actions,
+                               total_actions=len(actions),
+                               filtres={'numero': f_numero, 'action': f_action, 'user': f_user, 'mois': selected_mois})
+
+    # ─── ARCHIVES MENSUELLES INDÉPENDANTES ─────────────────────────────────
+    @app.route('/archives')
+    @login_required
+    def archives():
+        if not peut_voir_archives(current_user):
+            abort(403)
+
+        now = datetime.utcnow()
+        # Liste de tous les mois archivés
+        dates_raw = db.session.query(BonDeCommande.date_creation).order_by(BonDeCommande.date_creation.desc()).all()
+        mois_disponibles = sorted(list({d[0].strftime('%Y-%m') for d in dates_raw if d[0]}), reverse=True)
+        if not mois_disponibles:
+            mois_disponibles = [now.strftime('%Y-%m')]
+
+        selected_mois = request.args.get('mois', '')
+        if not selected_mois:
+            # Par défaut, le mois précédent ou le dernier mois disponible
+            selected_mois = mois_disponibles[0]
+
+        f_numero = request.args.get('numero', '').strip()
+        f_date   = request.args.get('date', '').strip()
+        f_statut = request.args.get('statut', '').strip()
+
+        # Plage temporelle stricte du mois sélectionné
+        try:
+            annee, mois = map(int, selected_mois.split('-'))
+            debut_mois = datetime(annee, mois, 1)
+            fin_mois = datetime(annee + 1, 1, 1) if mois == 12 else datetime(annee, mois + 1, 1)
+        except Exception:
+            annee, mois = now.year, now.month
+            selected_mois = now.strftime('%Y-%m')
+            debut_mois = datetime(annee, mois, 1)
+            fin_mois = datetime(annee + 1, 1, 1) if mois == 12 else datetime(annee, mois + 1, 1)
+
+        q = BonDeCommande.query.filter(
+            BonDeCommande.date_creation >= debut_mois,
+            BonDeCommande.date_creation < fin_mois
+        )
 
         if f_numero:
             try:
                 q = q.filter(BonDeCommande.numero == int(f_numero))
             except ValueError:
                 pass
-        if f_action:
-            q = q.filter(HistoriqueAction.type_action == f_action)
-        if f_fournisseur:
-            q = q.filter(BonDeCommande.fournisseur.ilike(f'%{f_fournisseur}%'))
-        if f_user:
-            q = q.join(User, HistoriqueAction.user_id == User.id).filter(
-                User.nom_complet.ilike(f'%{f_user}%'))
-        if f_date_debut:
+        if f_statut:
+            q = q.filter(BonDeCommande.statut == f_statut)
+        if f_date:
             try:
-                dd = datetime.strptime(f_date_debut, '%Y-%m-%d')
-                q = q.filter(HistoriqueAction.timestamp >= dd)
-            except ValueError:
-                pass
-        if f_date_fin:
-            try:
-                df = datetime.strptime(f_date_fin, '%Y-%m-%d') + timedelta(days=1)
-                q = q.filter(HistoriqueAction.timestamp < df)
-            except ValueError:
+                d_cible = datetime.strptime(f_date, '%Y-%m-%d').date()
+                q = q.filter(cast(BonDeCommande.date_creation, db.Date) == d_cible)
+            except Exception:
                 pass
 
-        actions = q.order_by(HistoriqueAction.timestamp.desc()).limit(500).all()
-        types_actions = db.session.query(HistoriqueAction.type_action).distinct().all()
-        types_actions = [t[0] for t in types_actions]
+        bons = q.order_by(BonDeCommande.date_creation.desc()).all()
 
-        return render_template('history.html',
-                               actions=actions,
-                               types_actions=types_actions,
-                               filtres={'numero': f_numero, 'action': f_action,
-                                        'user': f_user, 'fournisseur': f_fournisseur,
-                                        'date_debut': f_date_debut, 'date_fin': f_date_fin})
+        # Statistiques d'archive pour le mois
+        stats_archive = {
+            'total_bons': len(bons),
+            'clotures': sum(1 for b in bons if b.statut == 'cloturee'),
+            'en_stock': sum(1 for b in bons if b.statut == 'en_stock'),
+            'recuperees': sum(1 for b in bons if b.statut == 'recuperee_transporteur'),
+            'annulees': sum(1 for b in bons if b.statut == 'annulee'),
+            'total_pieces': sum(b.total_pieces for b in bons),
+        }
+
+        return render_template('archives.html',
+                               bons=bons,
+                               selected_mois=selected_mois,
+                               mois_disponibles=mois_disponibles,
+                               stats_archive=stats_archive,
+                               filtres={'numero': f_numero, 'date': f_date, 'statut': f_statut, 'mois': selected_mois})
 
     # ─── SUIVI RÉCEPTIONS ─────────────────────────────────────────────────
     @app.route('/suivi')
@@ -775,6 +888,8 @@ def create_app():
                 u.peut_cloturer           = request.form.get('peut_cloturer') == 'on'
                 u.peut_annuler            = request.form.get('peut_annuler') == 'on'
                 u.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
+                u.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
+                u.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
                 db.session.add(u)
                 db.session.commit()
                 flash(f'Utilisateur {nom_complet} ({role}) créé avec succès.', 'success')
@@ -801,6 +916,8 @@ def create_app():
             user.peut_cloturer           = request.form.get('peut_cloturer') == 'on'
             user.peut_annuler            = request.form.get('peut_annuler') == 'on'
             user.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
+            user.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
+            user.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
             new_pw = request.form.get('password', '').strip()
             if new_pw:
                 user.set_password(new_pw)
@@ -878,6 +995,8 @@ def create_app():
                 ("peut_cloturer", "BOOLEAN DEFAULT FALSE"),
                 ("peut_annuler", "BOOLEAN DEFAULT FALSE"),
                 ("peut_gerer_utilisateurs", "BOOLEAN DEFAULT FALSE"),
+                ("peut_voir_historique", "BOOLEAN DEFAULT FALSE"),
+                ("peut_voir_archives", "BOOLEAN DEFAULT FALSE"),
                 ("est_spectateur", "BOOLEAN DEFAULT FALSE"),
             ]
             for col_nom, col_type in colonnes_permissions:
