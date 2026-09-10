@@ -280,6 +280,30 @@ def test_workflow():
     print("   [OK] Utilisateur n'apparaît plus dans la gestion des utilisateurs")
     print("   [OK] Historique des bons de commande préservé sans crash")
 
+    # 10. Test de l'Historique groupé par bon, des Archives mensuelles et des permissions
+    print("10. Test de l'Historique groupé par Bon et des Archives mensuelles...")
+    # Le DT a accès aux deux
+    res_hist_dt = client.get('/historique')
+    assert res_hist_dt.status_code == 200
+    assert b'accordionHistorique' in res_hist_dt.data
+    assert b'Tout replier' in res_hist_dt.data
+    print("   [OK] DT accède à l'Historique groupé par bon avec accordéon")
+
+    res_arch_dt = client.get('/archives')
+    assert res_arch_dt.status_code == 200
+    assert b'Dossier archiv' in res_arch_dt.data
+    print("   [OK] DT accède aux Archives mensuelles indépendantes")
+
+    # Test avec un utilisateur sans droit historique ni archives
+    client.get('/logout', follow_redirects=True)
+    res_login_trans = client.post('/login', data={'username': 'transporteur', 'password': 'Trans@2026!'}, follow_redirects=True)
+    assert res_login_trans.status_code == 200
+    res_hist_trans = client.get('/historique')
+    assert res_hist_trans.status_code == 403
+    res_arch_trans = client.get('/archives')
+    assert res_arch_trans.status_code == 403
+    print("   [OK] Utilisateur sans droit bloqué (403) pour Historique et Archives")
+
     print("\n=======================================================")
     print("  TOUS LES TESTS SONT VALIDES A 100% AVEC SUCCES !")
     print("=======================================================")
