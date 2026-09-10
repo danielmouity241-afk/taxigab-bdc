@@ -26,6 +26,8 @@ class User(UserMixin, db.Model):
     peut_cloturer            = db.Column(db.Boolean, default=False)
     peut_annuler             = db.Column(db.Boolean, default=False)
     peut_gerer_utilisateurs  = db.Column(db.Boolean, default=False)
+    peut_voir_historique     = db.Column(db.Boolean, default=False)  # Accès à l'historique et la traçabilité
+    peut_voir_archives       = db.Column(db.Boolean, default=False)  # Accès aux archives mensuelles
     est_spectateur           = db.Column(db.Boolean, default=False)  # Consultation totale et impression sans modification
 
     # Relations
@@ -93,6 +95,18 @@ class User(UserMixin, db.Model):
         if not self.actif or self.est_spectateur:
             return False
         return bool(self.peut_gerer_utilisateurs or self.role in ('DT', 'Directeur Technique'))
+
+    @property
+    def can_voir_historique(self):
+        if not self.actif:
+            return False
+        return bool(self.peut_voir_historique or self.est_spectateur or self.role in ('DT', 'Directeur Technique', 'DTA', 'Directeur Technique Adjoint'))
+
+    @property
+    def can_voir_archives(self):
+        if not self.actif:
+            return False
+        return bool(self.peut_voir_archives or self.est_spectateur or self.role in ('DT', 'Directeur Technique', 'DTA', 'Directeur Technique Adjoint'))
 
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
