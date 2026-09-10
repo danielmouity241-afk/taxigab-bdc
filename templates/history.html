@@ -1,138 +1,213 @@
 {% extends "base.html" %}
-{% block title %}Historique — TAXI GAB+{% endblock %}
-{% block page_title %}<i class="bi bi-clock-history me-2"></i>Historique & traçabilité{% endblock %}
+{% block title %}Historique & Traçabilité — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-clock-history me-2"></i>Historique & Traçabilité des Bons de Commande{% endblock %}
 
 {% block content %}
 
-<!-- ── FILTRES ────────────────────────────────────────────────────────── -->
+<!-- ── FILTRES PAR MOIS & CRITÈRES ──────────────────────────────────────── -->
 <div class="card border-0 shadow-sm mb-4">
-  <div class="card-header bg-white border-bottom py-3">
-    <button class="btn btn-sm btn-outline-secondary w-100 text-start" data-bs-toggle="collapse"
-            data-bs-target="#filtres-hist">
-      <i class="bi bi-funnel me-2"></i><strong>Filtrer l'historique</strong>
-    </button>
-  </div>
-  <div class="collapse show" id="filtres-hist">
-    <div class="card-body">
-      <form method="GET" action="{{ url_for('historique') }}">
-        <div class="row g-3">
-          <div class="col-md-2">
-            <label class="form-label small fw-semibold">N° BON</label>
-            <input type="number" name="numero" class="form-control form-control-sm"
-                   placeholder="ex: 752" value="{{ filtres.numero }}">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Type d'action</label>
-            <select name="action" class="form-select form-select-sm">
-              <option value="">Toutes les actions</option>
-              {% for t in types_actions %}
-              <option value="{{ t }}" {% if filtres.action == t %}selected{% endif %}>
-                {{ t|replace('_', ' ')|capitalize }}
-              </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Utilisateur</label>
-            <input type="text" name="user" class="form-control form-control-sm"
-                   placeholder="Nom de l'utilisateur" value="{{ filtres.user }}">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small fw-semibold">Date début</label>
-            <input type="date" name="date_debut" class="form-control form-control-sm"
-                   value="{{ filtres.date_debut }}">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small fw-semibold">Date fin</label>
-            <input type="date" name="date_fin" class="form-control form-control-sm"
-                   value="{{ filtres.date_fin }}">
-          </div>
-          <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary-navy btn-sm">
-              <i class="bi bi-search me-1"></i> Rechercher
-            </button>
-            <a href="{{ url_for('historique') }}" class="btn btn-outline-secondary btn-sm">
-              <i class="bi bi-x-circle me-1"></i> Réinitialiser
-            </a>
-          </div>
-        </div>
-      </form>
+  <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h6 class="mb-0 fw-bold text-navy">
+        <i class="bi bi-calendar3 me-2"></i>Période : 
+        <span class="text-primary">{{ selected_mois.split('-')[1] }}/{{ selected_mois.split('-')[0] }}</span>
+      </h6>
+      <small class="text-muted">Chaque fin de mois, les historiques sont automatiquement classés dans les <strong>Archives</strong>.</small>
     </div>
+    {% if current_user.can_voir_archives %}
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('archives') }}" class="btn btn-sm btn-outline-warning text-dark fw-semibold">
+        <i class="bi bi-archive me-1"></i>Accéder aux Archives mensuelles
+      </a>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('historique') }}" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Mois / Période</label>
+        <select name="mois" class="form-select form-select-sm">
+          {% for m in mois_disponibles %}
+          <option value="{{ m }}" {% if selected_mois == m %}selected{% endif %}>
+            {{ m }} ({{ m.split('-')[1] }}/{{ m.split('-')[0] }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">N° de Bon</label>
+        <input type="number" name="numero" class="form-control form-control-sm"
+               placeholder="ex: 1, 2..." value="{{ filtres.numero }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Intervenant / Utilisateur</label>
+        <input type="text" name="user" class="form-control form-control-sm"
+               placeholder="Nom de l'agent" value="{{ filtres.user }}">
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary-navy btn-sm w-100 fw-semibold">
+          <i class="bi bi-search me-1"></i> Filtrer
+        </button>
+        <a href="{{ url_for('historique') }}" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
+          <i class="bi bi-arrow-counterclockwise"></i>
+        </a>
+      </div>
+    </form>
   </div>
 </div>
 
-<!-- ── RÉSULTATS ───────────────────────────────────────────────────────── -->
+<!-- ── LISTE DES BONS AVEC DÉPLIAGE DYNAMIQUE ───────────────────────────── -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
-    <h6 class="mb-0 fw-bold text-navy">
-      <i class="bi bi-list-check me-2"></i>
-      {{ actions|length }} action(s) enregistrée(s)
-    </h6>
+    <div>
+      <h6 class="mb-0 fw-bold text-navy">
+        <i class="bi bi-card-checklist me-2"></i>
+        {{ bons_groupes|length }} Bon(s) de commande actif(s) sur ce mois
+      </h6>
+      <small class="text-muted">{{ total_actions }} action(s) de traçabilité répertoriée(s)</small>
+    </div>
+    <div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllAccordions(true)">
+        <i class="bi bi-arrows-expand me-1"></i>Tout déplier
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleAllAccordions(false)">
+        <i class="bi bi-arrows-collapse me-1"></i>Tout replier
+      </button>
+    </div>
   </div>
-  <div class="card-body p-0">
-    {% if actions %}
-    <div class="table-responsive">
-      <table class="table table-hover table-bdc mb-0">
-        <thead>
-          <tr>
-            <th style="width:160px;">Date & Heure</th>
-            <th style="width:100px;">N° BON</th>
-            <th>Action</th>
-            <th>Utilisateur</th>
-            <th>Statut</th>
-            <th>Détails</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for action in actions %}
-          <tr>
-            <td class="small text-muted">
-              <i class="bi bi-calendar3 me-1"></i>{{ action.timestamp.strftime('%d/%m/%Y') }}<br>
-              <i class="bi bi-clock me-1"></i>{{ action.timestamp.strftime('%H:%M:%S') }}
-            </td>
-            <td>
-              <a href="{{ url_for('bdc_view', id=action.bdc_id) }}"
-                 class="bdc-numero">{{ action.bon.numero }}</a>
-            </td>
-            <td>
-              <span>
-                <i class="bi {{ action.icone }} me-1"></i>
-                {{ action.type_action_label }}
-              </span>
-            </td>
-            <td>
-              {% if action.acteur %}
-                <div class="fw-semibold">{{ action.acteur.nom_complet }}</div>
-                <div class="text-muted small">{{ action.acteur.role_label }}</div>
-              {% else %}
-                <span class="text-muted small">Système</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if action.ancien_statut %}
-                <span class="badge bg-secondary small">{{ action.ancien_statut }}</span>
-                <i class="bi bi-arrow-right mx-1 small"></i>
-              {% endif %}
-              {% if action.nouveau_statut %}
-                <span class="badge bg-primary small">{{ action.nouveau_statut }}</span>
-              {% endif %}
-            </td>
-            <td class="text-muted small">{{ action.details or '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="card-body p-3">
+    {% if bons_groupes %}
+    <div class="accordion" id="accordionHistorique">
+      {% for groupe in bons_groupes %}
+      {% set bon = groupe.bon %}
+      {% set actions = groupe.actions %}
+      <div class="accordion-item border rounded mb-3 shadow-xs overflow-hidden">
+        <h2 class="accordion-header" id="heading-{{ bon.id }}">
+          <button class="accordion-button collapsed py-3 px-3" type="button" 
+                  data-bs-toggle="collapse" data-bs-target="#collapse-{{ bon.id }}" 
+                  aria-expanded="false" aria-controls="collapse-{{ bon.id }}">
+            <div class="d-flex align-items-center justify-content-between w-100 me-3 flex-wrap gap-2">
+              <div class="d-flex align-items-center gap-3">
+                <span class="fs-6 fw-bold text-navy" style="font-family: monospace;">
+                  {{ bon.numero_complet }}
+                </span>
+                {% if bon.est_garage %}
+                  <span class="badge bg-secondary"><i class="bi bi-wrench me-1"></i>Garage / Interne</span>
+                {% else %}
+                  <span class="badge bg-navy"><i class="bi bi-car-front me-1"></i>{{ bon.vehicule_nom or 'Véhicule' }}</span>
+                {% endif %}
+                <span class="badge bg-{{ bon.statut_couleur }}">
+                  {{ bon.statut_label }}
+                </span>
+              </div>
+              <div class="d-flex align-items-center gap-3 small text-muted">
+                <div>
+                  <i class="bi bi-person me-1"></i>Demandeur : <strong>{{ bon.demandeur_nom }}</strong>
+                </div>
+                <div>
+                  <i class="bi bi-clock-history me-1"></i>Dernière action : 
+                  <span class="fw-semibold text-dark">{{ groupe.derniere_action.strftime('%d/%m/%Y %H:%M') }}</span>
+                </div>
+                <span class="badge rounded-pill bg-light text-dark border">
+                  {{ actions|length }} étape(s)
+                </span>
+              </div>
+            </div>
+          </button>
+        </h2>
+        <div id="collapse-{{ bon.id }}" class="accordion-collapse collapse" 
+             aria-labelledby="heading-{{ bon.id }}" data-bs-parent="#accordionHistorique">
+          <div class="accordion-body bg-light border-top p-4">
+            
+            <!-- Lien rapide vers le bon complet -->
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+              <div>
+                <span class="fw-semibold text-navy">Traçabilité complète du Bon N° {{ bon.numero_complet }}</span>
+                {% if bon.vehicule_immatriculation %}&bull; Immat : <code>{{ bon.vehicule_immatriculation }}</code>{% endif %}
+                {% if bon.transporteur %}&bull; Transporteur : <span class="fw-semibold">{{ bon.transporteur }}</span>{% endif %}
+              </div>
+              <a href="{{ url_for('bdc_view', id=bon.id) }}" class="btn btn-sm btn-primary-navy" target="_blank">
+                <i class="bi bi-box-arrow-up-right me-1"></i>Ouvrir le Bon de Commande
+              </a>
+            </div>
+
+            <!-- Timeline chronologique détaillée de ce bon -->
+            <div class="timeline ps-2">
+              {% for action in actions %}
+              <div class="timeline-item mb-3">
+                <div class="timeline-dot">
+                  <i class="bi {{ action.icone }}"></i>
+                </div>
+                <div class="timeline-content bg-white p-3 rounded shadow-xs border">
+                  <div class="d-flex align-items-center justify-content-between flex-wrap gap-1 mb-1">
+                    <strong class="text-navy fs-7">
+                      <i class="bi {{ action.icone }} me-1 text-primary"></i>
+                      {{ action.type_action_label }}
+                    </strong>
+                    <span class="text-muted small">
+                      <i class="bi bi-calendar3 me-1"></i>{{ action.timestamp.strftime('%d/%m/%Y à %H:%M:%S') }}
+                    </span>
+                  </div>
+                  
+                  <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                    {% if action.acteur %}
+                      <span class="small fw-semibold text-dark">
+                        <i class="bi bi-person-badge me-1"></i>{{ action.acteur.nom_complet }}
+                      </span>
+                      <span class="badge bg-light text-secondary border small">{{ action.acteur.role_label }}</span>
+                    {% else %}
+                      <span class="small text-muted"><i class="bi bi-robot me-1"></i>Système automatique</span>
+                    {% endif %}
+
+                    {% if action.ancien_statut and action.nouveau_statut %}
+                      <span class="ms-2 small">
+                        <span class="badge bg-secondary">{{ action.ancien_statut }}</span>
+                        <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                        <span class="badge bg-primary">{{ action.nouveau_statut }}</span>
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  {% if action.details %}
+                  <div class="small text-secondary mt-2 p-2 bg-light rounded border-start border-primary border-3">
+                    {{ action.details }}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+          </div>
+        </div>
+      </div>
+      {% endfor %}
     </div>
     {% else %}
     <div class="text-center py-5 text-muted">
-      <i class="bi bi-clock-history fs-1 d-block mb-3"></i>
-      <p>Aucune action ne correspond aux critères sélectionnés.</p>
+      <i class="bi bi-folder-x fs-1 d-block mb-3 text-secondary"></i>
+      <h5>Aucun historique trouvé pour cette période</h5>
+      <p class="small">Aucune action n'a été enregistrée pour les critères sélectionnés sur le mois de {{ selected_mois }}.</p>
       <a href="{{ url_for('historique') }}" class="btn btn-sm btn-outline-secondary">
-        Effacer les filtres
+        Réinitialiser la période
       </a>
     </div>
     {% endif %}
   </div>
 </div>
+
+<script>
+function toggleAllAccordions(open) {
+  const collapsibles = document.querySelectorAll('#accordionHistorique .accordion-collapse');
+  collapsibles.forEach(c => {
+    const bsCollapse = bootstrap.Collapse.getOrCreateInstance(c, { toggle: false });
+    if (open) {
+      bsCollapse.show();
+    } else {
+      bsCollapse.hide();
+    }
+  });
+}
+</script>
 
 {% endblock %}
