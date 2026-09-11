@@ -70,11 +70,24 @@
       </div>
       <div class="card-body">
         <div class="row g-3">
-          <div class="col-12">
+          <div class="col-md-7">
             <label class="form-label fw-semibold">Fournisseur</label>
-            <input type="text" name="fournisseur" class="form-control"
-                   placeholder="ex: CFAO Motors, Tractafric, Gabon Pièces...">
-            <div class="form-text text-muted">Le fournisseur auprès duquel les pièces sont commandées.</div>
+            <input type="text" name="fournisseur" id="input_fournisseur" list="fournisseurs-list" class="form-control"
+                   placeholder="ex: CFAO Motors, Tractafric, Gabon Pièces..." autocomplete="off">
+            <datalist id="fournisseurs-list">
+              {% for f in fournisseurs_carnet %}
+              <option value="{{ f.nom }}" data-wa="{{ f.whatsapp or f.telephone or '' }}">{{ f.nom }}{% if f.telephone or f.whatsapp %} (WhatsApp: {{ f.whatsapp or f.telephone }}){% endif %}</option>
+              {% endfor %}
+            </datalist>
+            <div class="form-text text-muted">Sélectionnez un fournisseur enregistré ou tapez un nouveau nom.</div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-whatsapp text-success me-1"></i>N° WhatsApp Fournisseur
+            </label>
+            <input type="tel" name="fournisseur_whatsapp" id="input_fournisseur_whatsapp" class="form-control"
+                   placeholder="ex: +241 74 00 00 00">
+            <div class="form-text text-muted">Pour notification directe du bon validé en 1 clic.</div>
           </div>
 
           <!-- Section Spécifique Véhicule (masquée si Bon Garage) -->
@@ -295,6 +308,24 @@ function toggleTypeBon(type) {
 document.addEventListener('DOMContentLoaded', function() {
   const isGarage = document.getElementById('type_garage').checked;
   toggleTypeBon(isGarage ? 'garage' : 'vehicule');
+
+  // Auto-remplissage WhatsApp si le fournisseur est sélectionné dans le carnet
+  const fournisseurInput = document.getElementById('input_fournisseur');
+  const waInput = document.getElementById('input_fournisseur_whatsapp');
+  if (fournisseurInput && waInput) {
+    fournisseurInput.addEventListener('input', function() {
+      const val = this.value.trim().toLowerCase();
+      const options = document.querySelectorAll('#fournisseurs-list option');
+      options.forEach(opt => {
+        if (opt.value.trim().toLowerCase() === val) {
+          const wa = opt.getAttribute('data-wa');
+          if (wa) {
+            waInput.value = wa;
+          }
+        }
+      });
+    });
+  }
 
   // Avertissement obligatoire pour la vérification de caution
   const modalCautionEl = document.getElementById('modal-avertissement-caution');
