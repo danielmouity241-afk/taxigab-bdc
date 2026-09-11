@@ -2,6 +2,9 @@
 app.py — Application principale Flask — Système BDC TAXI GAB+
 """
 import os
+import secrets
+import re
+import urllib.parse
 from datetime import datetime, timedelta
 from flask import (Flask, render_template, redirect, url_for, request,
                    flash, abort, send_file, jsonify)
@@ -11,7 +14,8 @@ from sqlalchemy import or_, and_, func, extract, cast
 import io
 
 from config import Config
-from database import db, User, BonDeCommande, LigneBDC, HistoriqueAction, STATUTS_BDC, STATUTS_COULEURS
+from database import (db, User, BonDeCommande, LigneBDC, HistoriqueAction,
+                      Fournisseur, STATUTS_BDC, STATUTS_COULEURS)
 from pdf_generator import generate_bdc_pdf
 
 # ─────────────────────────────────────────
@@ -264,11 +268,12 @@ def create_app():
             abort(403)
 
         if request.method == 'POST':
-            type_bon        = request.form.get('type_bon', 'vehicule').strip()
-            demandeur_nom   = request.form.get('demandeur_nom', '').strip()
-            service         = request.form.get('service_departement', '').strip()
-            fournisseur     = request.form.get('fournisseur', '').strip()
-            observations    = request.form.get('observations_generales', '').strip()
+            type_bon             = request.form.get('type_bon', 'vehicule').strip()
+            demandeur_nom        = request.form.get('demandeur_nom', '').strip()
+            service              = request.form.get('service_departement', '').strip()
+            fournisseur          = request.form.get('fournisseur', '').strip()
+            fournisseur_whatsapp = request.form.get('fournisseur_whatsapp', '').strip()
+            observations         = request.form.get('observations_generales', '').strip()
 
             if type_bon == 'garage':
                 vehicule_nom   = 'GARAGE'
@@ -283,11 +288,14 @@ def create_app():
             quantites    = request.form.getlist('quantite[]')
             obs_lignes   = request.form.getlist('obs_ligne[]')
 
+            fournisseurs_carnet = Fournisseur.query.order_by(Fournisseur.nom.asc()).all()
+
             if not demandeur_nom:
                 flash('Le nom du demandeur est obligatoire.', 'danger')
                 return render_template('bdc/create.html',
                                        demandeur_defaut=current_user.nom_complet,
-                                       service_defaut=current_user.role_label)
+                                       service_defaut=current_user.role_label,
+                                       fournisseurs_carnet=fournisseurs_carnet)
 
             lignes_valides = [(d.strip(), q, o.strip())
                                for d, q, o in zip(designations, quantites, obs_lignes)
@@ -296,17 +304,29 @@ def create_app():
                 flash('Veuillez saisir au moins une pièce.', 'danger')
                 return render_template('bdc/create.html',
                                        demandeur_defaut=current_user.nom_complet,
-                                       service_defaut=current_user.role_label)
+                                       service_defaut=current_user.role_label,
+                                       fournisseurs_carnet=fournisseurs_carnet)
 
             statut_initial = 'validee' if current_user.role == 'DT' else 'en_attente'
 
+            # Créer ou mettre à jour le fournisseur dans le carnet
+            if fournisseur:
+                f_obj = Fournisseur.query.filter(func.lower(Fournisseur.nom) == func.lower(fournisseur)).first()
+                if not f_obj:
+                    f_obj = Fournisseur(nom=fournisseur, whatsapp=fournisseur_whatsapp)
+                    db.session.add(f_obj)
+                elif fournisseur_whatsapp and not f_obj.whatsapp:
+                    f_obj.whatsapp = fournisseur_whatsapp
+
             bdc = BonDeCommande(
                 numero=get_next_numero(),
+                code_securise=secrets.token_urlsafe(16),
                 type_bon=type_bon,
                 createur_id=current_user.id,
                 demandeur_nom=demandeur_nom,
                 service_departement=service,
                 fournisseur=fournisseur,
+                fournisseur_whatsapp=fournisseur_whatsapp,
                 vehicule_nom=vehicule_nom,
                 vehicule_immatriculation=vehicule_immat,
                 transporteur=transporteur,
@@ -345,9 +365,11 @@ def create_app():
             flash(f'Bon de commande N°{bdc.numero} créé avec succès !', 'success')
             return redirect(url_for('bdc_view', id=bdc.id))
 
+        fournisseurs_carnet = Fournisseur.query.order_by(Fournisseur.nom.asc()).all()
         return render_template('bdc/create.html',
                                demandeur_defaut=current_user.nom_complet,
-                               service_defaut=current_user.role_label)
+                               service_defaut=current_user.role_label,
+                               fournisseurs_carnet=fournisseurs_carnet)
 
     # ─── VOIR UN BDC ──────────────────────────────────────────────────────
     @app.route('/bdc/<int:id>')
@@ -356,11 +378,55 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
+
+        if not bdc.code_securise:
+            bdc.ensure_code_securise()
+            db.session.commit()
+
+        base_url = request.host_url.rstrip('/')
+        if 'taxigab-bdc.com' in request.host:
+            base_url = 'https://taxigab-bdc.com'
+        lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
+
+        dest_nom = bdc.fournisseur or 'Fournisseur'
+        msg_wa = (
+            f"Bonjour {dest_nom},\n\n"
+            f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+        phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
+        if phone_clean:
+            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa)}"
+        else:
+            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
+
         return render_template('bdc/view.html',
                                bdc=bdc,
+                               whatsapp_url=whatsapp_url,
+                               lien_public_pdf=lien_public_pdf,
+                               msg_wa=msg_wa,
                                peut_valider=peut_valider_dt(current_user),
                                peut_annuler=peut_annuler(current_user, bdc),
                                peut_gerer_stock=peut_gerer_stock(current_user))
+
+    @app.route('/bdc/<int:id>/modifier_whatsapp', methods=['POST'])
+    @login_required
+    def bdc_modifier_whatsapp(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        num_wa = request.form.get('fournisseur_whatsapp', '').strip()
+        bdc.fournisseur_whatsapp = num_wa
+        if bdc.fournisseur:
+            f_obj = Fournisseur.query.filter(func.lower(Fournisseur.nom) == func.lower(bdc.fournisseur)).first()
+            if f_obj:
+                f_obj.whatsapp = num_wa
+        db.session.commit()
+        flash(f'Numéro WhatsApp mis à jour : {num_wa or "Non renseigné"}', 'success')
+        return redirect(url_for('bdc_view', id=id))
 
     # ─── VALIDER (DT) ─────────────────────────────────────────────────────
     @app.route('/bdc/<int:id>/valider', methods=['POST'])
@@ -379,6 +445,7 @@ def create_app():
         bdc.statut = 'validee'
         bdc.validateur_dt_id = current_user.id
         bdc.date_validation_dt = datetime.now()
+        bdc.ensure_code_securise()
         enregistrer_action(bdc, 'validation_dt', ancien_statut=ancien, nouveau_statut='validee',
                             details=f"Validé par {current_user.nom_complet}")
         db.session.commit()
@@ -602,6 +669,26 @@ def create_app():
             download_name=f"{bdc.numero_affiche.replace('/', '-')}{suffixe}.pdf"
         )
 
+    # ─── PDF PUBLIC SÉCURISÉ FOURNISSEUR (ACCÈS DIRECT SANS COMPTE) ───────
+    @app.route('/commande/pdf/<string:code_securise>')
+    def bdc_public_pdf(code_securise):
+        bdc = BonDeCommande.query.filter_by(code_securise=code_securise).first()
+        if not bdc:
+            abort(404)
+
+        # Si le bon est en attente de validation ou refusé/annulé, afficher la page d'attente explicative
+        if bdc.statut in ('en_attente', 'refusee', 'annulee'):
+            return render_template('bdc/public_waiting.html', bdc=bdc)
+
+        # Si validé par le DT (ou statut ultérieur) : servir le PDF officiel
+        pdf_bytes = generate_bdc_pdf(bdc, Config, avec_reception=False)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=f"{bdc.numero_affiche.replace('/', '-')}.pdf"
+        )
+
     # ─── NOUVELLE RUBRIQUE : FOURNISSEURS & HISTORIQUE MENSUEL ───────────
     @app.route('/fournisseurs')
     @login_required
@@ -614,6 +701,9 @@ def create_app():
             .filter(BonDeCommande.fournisseur.isnot(None), BonDeCommande.fournisseur != '')\
             .distinct().order_by(BonDeCommande.fournisseur).all()
         liste_fournisseurs = [f[0] for f in fournisseurs_raw]
+
+        # Carnet complet des fournisseurs enregistrés
+        carnet_fournisseurs = Fournisseur.query.order_by(Fournisseur.nom.asc()).all()
 
         # Requête de base pour les statistiques et les bons
         q = BonDeCommande.query.filter(BonDeCommande.fournisseur.isnot(None), BonDeCommande.fournisseur != '')
@@ -667,7 +757,65 @@ def create_app():
                                selected_mois=selected_mois,
                                mois_disponibles=mois_disponibles,
                                bons=bons,
-                               stats_fournisseurs=stats_fournisseurs)
+                               stats_fournisseurs=stats_fournisseurs,
+                               carnet_fournisseurs=carnet_fournisseurs)
+
+    @app.route('/fournisseurs/ajouter', methods=['POST'])
+    @login_required
+    def fournisseur_ajouter():
+        nom = request.form.get('nom', '').strip()
+        if not nom:
+            flash('Le nom du fournisseur est obligatoire.', 'danger')
+            return redirect(url_for('fournisseurs'))
+        f_existant = Fournisseur.query.filter(func.lower(Fournisseur.nom) == func.lower(nom)).first()
+        if f_existant:
+            flash(f'Le fournisseur « {nom} » existe déjà.', 'warning')
+            return redirect(url_for('fournisseurs'))
+        
+        nouveau_f = Fournisseur(
+            nom=nom,
+            contact_nom=request.form.get('contact_nom', '').strip(),
+            telephone=request.form.get('telephone', '').strip(),
+            whatsapp=request.form.get('whatsapp', '').strip(),
+            email=request.form.get('email', '').strip(),
+            adresse=request.form.get('adresse', '').strip()
+        )
+        db.session.add(nouveau_f)
+        db.session.commit()
+        flash(f'Fournisseur « {nom} » enregistré dans le carnet avec succès.', 'success')
+        return redirect(url_for('fournisseurs'))
+
+    @app.route('/fournisseurs/<int:id>/modifier', methods=['POST'])
+    @login_required
+    def fournisseur_modifier(id):
+        f_obj = db.session.get(Fournisseur, id)
+        if not f_obj:
+            abort(404)
+        nom = request.form.get('nom', '').strip()
+        if not nom:
+            flash('Le nom du fournisseur est obligatoire.', 'danger')
+            return redirect(url_for('fournisseurs'))
+        f_obj.nom = nom
+        f_obj.contact_nom = request.form.get('contact_nom', '').strip()
+        f_obj.telephone = request.form.get('telephone', '').strip()
+        f_obj.whatsapp = request.form.get('whatsapp', '').strip()
+        f_obj.email = request.form.get('email', '').strip()
+        f_obj.adresse = request.form.get('adresse', '').strip()
+        db.session.commit()
+        flash(f'Fiche fournisseur « {nom} » mise à jour avec succès.', 'success')
+        return redirect(url_for('fournisseurs'))
+
+    @app.route('/fournisseurs/<int:id>/supprimer', methods=['POST'])
+    @login_required
+    def fournisseur_supprimer(id):
+        f_obj = db.session.get(Fournisseur, id)
+        if not f_obj:
+            abort(404)
+        nom = f_obj.nom
+        db.session.delete(f_obj)
+        db.session.commit()
+        flash(f'Fournisseur « {nom} » supprimé du carnet.', 'info')
+        return redirect(url_for('fournisseurs'))
 
     # ─── HISTORIQUE DU MOIS EN COURS (GROUPÉ PAR BON) ─────────────────────
     @app.route('/historique')
@@ -1005,6 +1153,30 @@ def create_app():
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
+
+            # Migration automatique des colonnes BDC (fournisseur_whatsapp et code_securise)
+            colonnes_bdc = [
+                ("fournisseur_whatsapp", "VARCHAR(64)"),
+                ("code_securise", "VARCHAR(64)"),
+            ]
+            for col_nom, col_type in colonnes_bdc:
+                try:
+                    db.session.execute(text(f"ALTER TABLE bons_de_commande ADD COLUMN {col_nom} {col_type}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+            # Remplir code_securise pour les bons existants qui n'en ont pas
+            try:
+                bons_sans_code = BonDeCommande.query.filter(
+                    or_(BonDeCommande.code_securise == None, BonDeCommande.code_securise == '')
+                ).all()
+                for b in bons_sans_code:
+                    b.code_securise = secrets.token_urlsafe(16)
+                if bons_sans_code:
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
 
             # Comptes par défaut
             default_users = [
