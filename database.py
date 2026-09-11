@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+import secrets
 
 db = SQLAlchemy()
 
@@ -153,6 +154,8 @@ class BonDeCommande(db.Model):
 
     # Fournisseur
     fournisseur              = db.Column(db.String(128), nullable=True)
+    fournisseur_whatsapp     = db.Column(db.String(64), nullable=True)
+    code_securise            = db.Column(db.String(64), unique=True, index=True, nullable=True)
 
     # Véhicule & Transporteur (uniquement si type_bon == 'vehicule')
     vehicule_nom             = db.Column(db.String(64))   # ex: TG 433
@@ -226,6 +229,11 @@ class BonDeCommande(db.Model):
     @property
     def total_pieces(self):
         return len(self.lignes)
+
+    def ensure_code_securise(self):
+        if not self.code_securise:
+            self.code_securise = secrets.token_urlsafe(16)
+        return self.code_securise
 
     def __repr__(self):
         return f'<BDC N°{self.numero_affiche} [{self.statut}]>'
@@ -313,3 +321,21 @@ class HistoriqueAction(db.Model):
             'modification':              'bi-pencil-fill text-warning',
         }
         return icones.get(self.type_action, 'bi-circle-fill text-muted')
+
+
+# ─────────────────────────────────────────
+# FOURNISSEURS
+# ─────────────────────────────────────────
+class Fournisseur(db.Model):
+    __tablename__ = 'fournisseurs'
+    id            = db.Column(db.Integer, primary_key=True)
+    nom           = db.Column(db.String(128), unique=True, nullable=False)
+    contact_nom   = db.Column(db.String(128), nullable=True)
+    telephone     = db.Column(db.String(64), nullable=True)
+    whatsapp      = db.Column(db.String(64), nullable=True)
+    email         = db.Column(db.String(128), nullable=True)
+    adresse       = db.Column(db.String(256), nullable=True)
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Fournisseur {self.nom}>'
