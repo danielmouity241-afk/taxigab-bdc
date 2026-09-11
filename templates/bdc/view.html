@@ -57,7 +57,14 @@
             <div class="row g-3">
               <div class="col-md-6">
                 <span class="fw-semibold text-muted small d-block">Fournisseur :</span>
-                <strong class="text-navy fs-6">{{ bdc.fournisseur or '— Non renseigné —' }}</strong>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <strong class="text-navy fs-6">{{ bdc.fournisseur or '— Non renseigné —' }}</strong>
+                  {% if bdc.fournisseur_whatsapp %}
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success small">
+                    <i class="bi bi-whatsapp me-1"></i>{{ bdc.fournisseur_whatsapp }}
+                  </span>
+                  {% endif %}
+                </div>
               </div>
 
               {% if bdc.est_garage %}
@@ -461,6 +468,54 @@
           </ul>
         </div>
 
+        <!-- ENVOI WHATSAPP DU BON VALIDÉ AU FOURNISSEUR -->
+        {% if bdc.statut in ['validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'] %}
+        <div class="card border border-success bg-success bg-opacity-10 p-3 rounded mb-2">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-success d-flex align-items-center">
+              <i class="bi bi-whatsapp fs-5 me-1 text-success"></i> Bon validé &bull; WhatsApp
+            </span>
+            <span class="badge bg-success text-white">Lien PDF direct</span>
+          </div>
+          <p class="small text-dark mb-2">
+            Transmettez le PDF officiel au fournisseur <strong>{{ bdc.fournisseur or 'Fournisseur' }}</strong> en 1 clic :
+          </p>
+          {% if bdc.fournisseur_whatsapp %}
+          <div class="small mb-2 text-dark d-flex align-items-center justify-content-between bg-white p-2 rounded border">
+            <span><i class="bi bi-telephone text-success me-1"></i><strong>{{ bdc.fournisseur_whatsapp }}</strong></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="modal" data-bs-target="#modal-modifier-whatsapp" title="Modifier le numéro">
+              <i class="bi bi-pencil"></i> Modifier
+            </button>
+          </div>
+          {% else %}
+          <div class="small text-danger mb-2 d-flex align-items-center justify-content-between bg-white p-2 rounded border border-warning">
+            <span><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> WhatsApp non renseigné</span>
+            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#modal-modifier-whatsapp">
+              + Ajouter
+            </button>
+          </div>
+          {% endif %}
+          <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-success fw-bold text-white shadow-sm w-100 mb-2">
+            <i class="bi bi-whatsapp me-2"></i> Envoyer le bon sur WhatsApp
+          </a>
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-navy text-decoration-none" title="Tester le lien du fournisseur">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Tester le lien PDF
+            </a>
+            <button type="button" class="btn btn-link btn-sm text-secondary p-0 text-decoration-none" onclick="navigator.clipboard.writeText('{{ lien_public_pdf }}'); alert('Lien direct du PDF copié dans le presse-papier !');">
+              <i class="bi bi-clipboard me-1"></i>Copier le lien
+            </button>
+          </div>
+        </div>
+        {% elif bdc.statut == 'en_attente' %}
+        <div class="alert alert-warning border border-warning-subtle small mb-2 p-2 d-flex gap-2 align-items-start">
+          <i class="bi bi-hourglass-split text-warning fs-5 flex-shrink-0"></i>
+          <div>
+            <strong>Lien WhatsApp réservé :</strong> Le bon doit d'abord être validé par la Direction Technique avant de pouvoir être transmis au fournisseur.
+          </div>
+        </div>
+        {% endif %}
+
         <!-- 1. VALIDATION DT (si en attente) -->
         {% if peut_valider and bdc.statut == 'en_attente' %}
         <button type="button" class="btn btn-success fw-semibold"
@@ -725,6 +780,32 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Retour</button>
           <button type="submit" class="btn btn-dark btn-sm">Annuler le bon</button>
+        </div>
+      </form>
+    </div>
+  </div>
+<!-- Modifier le numéro WhatsApp du fournisseur -->
+<div class="modal fade" id="modal-modifier-whatsapp" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title"><i class="bi bi-whatsapp me-2"></i>Numéro WhatsApp Fournisseur</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_modifier_whatsapp', id=bdc.id) }}">
+        <div class="modal-body">
+          <p class="small text-muted">
+            Renseignez ou modifiez le numéro WhatsApp pour transmettre directement le bon de commande en format PDF :
+          </p>
+          <label class="form-label small fw-semibold">Numéro WhatsApp (avec indicatif pays, ex: +241 ...) :</label>
+          <input type="tel" name="fournisseur_whatsapp" class="form-control"
+                 value="{{ bdc.fournisseur_whatsapp or '' }}" placeholder="ex: +241 74 00 00 00">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check2-circle me-1"></i>Enregistrer le numéro
+          </button>
         </div>
       </form>
     </div>
