@@ -850,16 +850,37 @@
       </div>
       <form method="POST" action="{{ url_for('bdc_modifier_whatsapp', id=bdc.id) }}">
         <div class="modal-body">
-          <p class="small text-muted">
-            Renseignez ou modifiez le numéro WhatsApp pour transmettre directement le bon de commande en format PDF :
+          <p class="small text-muted mb-2">
+            Fournisseur : <strong class="text-navy fs-6">{{ bdc.fournisseur or 'Fournisseur' }}</strong>
           </p>
+
+          {% if fournisseurs_carnet %}
+          <!-- Sélecteur rapide depuis le répertoire -->
+          <div class="mb-3 p-2 bg-light rounded border">
+            <label class="form-label small fw-bold text-navy mb-1">
+              <i class="bi bi-person-lines-fill text-success me-1"></i>Choisir un numéro dans le répertoire :
+            </label>
+            <select class="form-select form-select-sm" onchange="if(this.value){ document.getElementById('input_modal_wa').value = this.value; }">
+              <option value="">-- Sélectionner un contact du répertoire --</option>
+              {% for f in fournisseurs_carnet %}
+              <option value="{{ f.whatsapp or '' }}" {% if f.nom and bdc.fournisseur and f.nom.lower() == bdc.fournisseur.lower() %}selected{% endif %}>
+                🏢 {{ f.nom }} {% if f.whatsapp %}— 📱 {{ f.whatsapp }}{% else %}— (Aucun numéro){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
           <label class="form-label small fw-semibold">Numéro WhatsApp (avec indicatif pays, ex: +241 ...) :</label>
-          <input type="tel" name="fournisseur_whatsapp" class="form-control"
-                 value="{{ bdc.fournisseur_whatsapp or '' }}" placeholder="ex: +241 74 00 00 00">
+          <input type="tel" name="fournisseur_whatsapp" id="input_modal_wa" class="form-control border-success fw-semibold"
+                 value="{{ bdc.fournisseur_whatsapp or '' }}" placeholder="ex: +241 74 00 00 00" required>
+          <div class="form-text text-muted small mt-1">
+            <i class="bi bi-info-circle me-1"></i>Ce numéro sera automatiquement enregistré dans le carnet d'adresses pour ce fournisseur.
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-          <button type="submit" class="btn btn-success btn-sm">
+          <button type="submit" class="btn btn-success btn-sm fw-semibold">
             <i class="bi bi-check2-circle me-1"></i>Enregistrer le numéro
           </button>
         </div>
