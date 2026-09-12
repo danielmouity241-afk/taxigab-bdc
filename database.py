@@ -67,7 +67,7 @@ class User(UserMixin, db.Model):
     def can_valider_dt(self):
         if not self.actif or self.est_spectateur:
             return False
-        return bool(self.peut_valider_dt or self.role in ('DT', 'Directeur Technique'))
+        return bool(self.role in ('DT', 'Directeur Technique') or self.is_directeur_technique or self.peut_valider_dt)
 
     @property
     def is_directeur_technique(self):
