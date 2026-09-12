@@ -64,6 +64,9 @@
                     <i class="bi bi-whatsapp me-1"></i>{{ bdc.fournisseur_whatsapp }}
                   </span>
                   {% endif %}
+                  <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="modal" data-bs-target="#modal-modifier-whatsapp" title="Modifier le numéro WhatsApp du fournisseur">
+                    <i class="bi bi-pencil-square text-primary me-1"></i>Modifier
+                  </button>
                 </div>
               </div>
 
@@ -535,10 +538,26 @@
           </div>
         </div>
         {% elif bdc.statut == 'en_attente' %}
-        <div class="alert alert-warning border border-warning-subtle small mb-2 p-2 d-flex gap-2 align-items-start">
-          <i class="bi bi-hourglass-split text-warning fs-5 flex-shrink-0"></i>
-          <div>
-            <strong>Envoi WhatsApp automatique réservé :</strong> Le bon sera expédié dès validation par la Direction Technique.
+        <div class="card border border-warning bg-warning bg-opacity-10 p-3 rounded mb-2">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-dark d-flex align-items-center small">
+              <i class="bi bi-whatsapp fs-6 me-1 text-success"></i> Destinataire WhatsApp
+            </span>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 bg-white" data-bs-toggle="modal" data-bs-target="#modal-modifier-whatsapp" title="Modifier le numéro">
+              <i class="bi bi-pencil"></i> Modifier
+            </button>
+          </div>
+          {% if bdc.fournisseur_whatsapp %}
+          <div class="small text-dark fw-semibold mb-2">
+            <i class="bi bi-telephone text-success me-1"></i>{{ bdc.fournisseur_whatsapp }}
+          </div>
+          {% else %}
+          <div class="small text-danger mb-2">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Numéro WhatsApp non renseigné
+          </div>
+          {% endif %}
+          <div class="small text-muted" style="font-size:0.8rem;">
+            <i class="bi bi-hourglass-split text-warning me-1"></i> Ce numéro recevra automatiquement le bon avec son lien PDF dès validation de la transmission par la Direction Technique.
           </div>
         </div>
         {% endif %}
@@ -819,6 +838,8 @@
       </form>
     </div>
   </div>
+</div>
+
 <!-- Modifier le numéro WhatsApp du fournisseur -->
 <div class="modal fade" id="modal-modifier-whatsapp" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
