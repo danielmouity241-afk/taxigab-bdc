@@ -1213,9 +1213,10 @@ def create_app():
             # Par défaut, le mois précédent ou le dernier mois disponible
             selected_mois = mois_disponibles[0]
 
-        f_numero = request.args.get('numero', '').strip()
-        f_date   = request.args.get('date', '').strip()
-        f_statut = request.args.get('statut', '').strip()
+        f_numero  = request.args.get('numero', '').strip()
+        f_date    = request.args.get('date', '').strip()
+        f_statut  = request.args.get('statut', '').strip()
+        f_relance = request.args.get('relance', '').strip()
 
         # Plage temporelle stricte du mois sélectionné
         try:
@@ -1249,6 +1250,11 @@ def create_app():
 
         bons = q.order_by(BonDeCommande.date_creation.desc()).all()
 
+        if f_relance == 'avec_relance':
+            bons = [b for b in bons if (b.nb_relances_whatsapp or 0) > 0]
+        elif f_relance == 'sans_relance':
+            bons = [b for b in bons if (b.nb_relances_whatsapp or 0) == 0]
+
         # Statistiques d'archive pour le mois
         stats_archive = {
             'total_bons': len(bons),
@@ -1257,6 +1263,9 @@ def create_app():
             'recuperees': sum(1 for b in bons if b.statut == 'recuperee_transporteur'),
             'annulees': sum(1 for b in bons if b.statut == 'annulee'),
             'total_pieces': sum(b.total_pieces for b in bons),
+            'total_relances': sum(b.nb_relances_whatsapp or 0 for b in bons),
+            'bons_avec_relance': sum(1 for b in bons if (b.nb_relances_whatsapp or 0) > 0),
+            'total_manipulations': sum(len(b.historique) for b in bons),
         }
 
         return render_template('archives.html',
@@ -1264,7 +1273,7 @@ def create_app():
                                selected_mois=selected_mois,
                                mois_disponibles=mois_disponibles,
                                stats_archive=stats_archive,
-                               filtres={'numero': f_numero, 'date': f_date, 'statut': f_statut, 'mois': selected_mois})
+                               filtres={'numero': f_numero, 'date': f_date, 'statut': f_statut, 'relance': f_relance, 'mois': selected_mois})
 
     # ─── SUIVI RÉCEPTIONS ─────────────────────────────────────────────────
     @app.route('/suivi')
@@ -1410,7 +1419,25 @@ def create_app():
         # Suppression définitive
         db.session.delete(user)
         db.session.commit()
-        flash(f"L'utilisateur « {nom_supprime} » a été définitivement supprimé.", 'success')
+        flash(f"L'utilisateur « {nom_supprime} » a été définitivement supprimé de la base de données.", 'info')
+        return redirect(url_for('admin_users'))
+
+    @app.route('/admin/utilisateurs/<int:id>/mot_de_passe', methods=['POST'])
+    @login_required
+    def admin_user_quick_password(id):
+        """Met à jour rapidement le mot de passe d'un utilisateur depuis le tableau."""
+        if not peut_gerer_utilisateurs(current_user):
+            abort(403)
+        user = db.session.get(User, id)
+        if not user:
+            abort(404)
+        new_pw = request.form.get('nouveau_mot_de_passe', '').strip()
+        if not new_pw:
+            flash("Le mot de passe ne peut pas être vide.", "danger")
+        else:
+            user.set_password(new_pw)
+            db.session.commit()
+            flash(f"Mot de passe de « {user.nom_complet} » mis à jour avec succès : {new_pw}", "success")
         return redirect(url_for('admin_users'))
 
     @app.route('/admin/utilisateurs/<int:id>/desactiver', methods=['POST'])
@@ -1499,6 +1526,7 @@ def create_app():
                 ("peut_voir_historique", "BOOLEAN DEFAULT FALSE"),
                 ("peut_voir_archives", "BOOLEAN DEFAULT FALSE"),
                 ("est_spectateur", "BOOLEAN DEFAULT FALSE"),
+                ("mot_de_passe_clair", "VARCHAR(128)"),
             ]
             for col_nom, col_type in colonnes_permissions:
                 try:

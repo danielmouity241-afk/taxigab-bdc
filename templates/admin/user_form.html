@@ -23,7 +23,7 @@
           
           <!-- Informations de base -->
           <h6 class="fw-bold text-navy mb-3 pb-2 border-bottom">
-            <i class="bi bi-person-vcard me-2"></i>1. Informations du compte
+            <i class="bi bi-person-vcard me-2"></i>1. Informations du compte & Mot de passe
           </h6>
           <div class="row g-3 mb-4">
             <div class="col-md-6">
@@ -39,191 +39,166 @@
                      {% if not user %}required placeholder="ex: jp.obiang"{% endif %}>
               {% if user %}<div class="form-text text-muted">L'identifiant ne peut pas être modifié.</div>{% endif %}
             </div>
+            
             <div class="col-md-6">
               <label class="form-label fw-semibold {% if not user %}required-label{% endif %}">
-                {% if user %}Nouveau mot de passe <span class="text-muted fw-normal">(laisser vide pour ne pas changer)</span>{% else %}Mot de passe{% endif %}
+                {% if user %}Mot de passe <span class="text-muted fw-normal">(laisser vide pour conserver l'actuel)</span>{% else %}Mot de passe de connexion{% endif %}
               </label>
-              <input type="password" name="password" class="form-control"
-                     {% if not user %}required{% endif %}
-                     placeholder="{% if user %}Nouveau mot de passe (optionnel){% else %}Mot de passe de connexion{% endif %}">
+              <div class="input-group">
+                <input type="password" name="password" id="input_form_password" class="form-control font-monospace"
+                       {% if not user %}required{% endif %}
+                       placeholder="{% if user and user.mot_de_passe_clair %}Actuel : {{ user.mot_de_passe_clair }}{% elif user %}Nouveau mot de passe{% else %}ex: Taxi@2026!{% endif %}">
+                <button class="btn btn-outline-secondary" type="button" onclick="toggleFormPassword()" title="Afficher / Masquer">
+                  <i class="bi bi-eye" id="icon_toggle_form_pw"></i>
+                </button>
+                <button class="btn btn-outline-secondary" type="button" onclick="genererPasswordForm()" title="Générer un mot de passe simple">
+                  <i class="bi bi-magic"></i>
+                </button>
+              </div>
+              {% if user and user.mot_de_passe_clair %}
+              <div class="form-text text-success small">
+                <i class="bi bi-key-fill me-1"></i>Mot de passe actuel enregistré : <strong>{{ user.mot_de_passe_clair }}</strong>
+              </div>
+              {% endif %}
             </div>
+
             <div class="col-md-6">
-              <label class="form-label fw-semibold required-label">Rôle / Fonction (Saisie manuelle libre)</label>
+              <label class="form-label fw-semibold required-label">Rôle / Fonction</label>
               <input type="text" name="role" id="role-input" class="form-control" list="roles-suggestions" required
                      value="{{ user.role if user else '' }}"
-                     placeholder="ex: Directeur Général, Magasinier, Aide Magasinier...">
+                     placeholder="ex: Magasinier, Directeur Général...">
               <datalist id="roles-suggestions">
-                <option value="Président Directeur Général (PDG)">
                 <option value="Directeur Général (DG)">
+                <option value="Président Directeur Général (PDG)">
                 <option value="Directeur Technique (DT)">
                 <option value="Directeur Technique Adjoint (DTA)">
                 <option value="Magasinier">
                 <option value="Aide Magasinier">
                 <option value="Chef d'Atelier">
-                <option value="Responsable Approvisionnement">
-                <option value="Comptable / Finance">
                 <option value="Transporteur / Chauffeur">
               </datalist>
-              <div class="form-text text-muted">Vous pouvez saisir n'importe quel intitulé personnalisé.</div>
             </div>
           </div>
 
-          <!-- Matrice des permissions et autorisations -->
+          <!-- Section Profils simplifiés -->
           <h6 class="fw-bold text-navy mb-3 pb-2 border-bottom d-flex align-items-center justify-content-between">
-            <span><i class="bi bi-shield-check me-2"></i>2. Autorisations & Actions autorisées</span>
-            <span class="small text-muted fw-normal">Contrôlez ce que cet utilisateur peut faire ou ne pas faire</span>
+            <span><i class="bi bi-shield-check me-2"></i>2. Profil d'accès simplifié (en 1 clic)</span>
+            <span class="small text-muted fw-normal">Sélectionnez le type d'accès pour ce compte</span>
           </h6>
 
-          <!-- Boutons de profils rapides -->
-          <div class="mb-3 p-2 bg-light rounded border d-flex flex-wrap align-items-center gap-2">
-            <span class="small fw-semibold text-muted me-1">Pré-remplissage rapide :</span>
-            <button type="button" class="btn btn-sm btn-outline-info" onclick="appliquerProfil('spectateur')">
-              <i class="bi bi-eye me-1"></i>Spectateur (PDG / DG)
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="appliquerProfil('dt')">
-              <i class="bi bi-tools me-1"></i>Direction Technique
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-success" onclick="appliquerProfil('magasinier')">
-              <i class="bi bi-box-seam me-1"></i>Magasinier
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="appliquerProfil('reset')">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Tout décocher
-            </button>
-          </div>
-
-          <!-- 1. Mode Spectateur -->
-          <div class="card border-info mb-3 bg-info-soft">
-            <div class="card-body p-3">
-              <div class="form-check form-switch">
-                <input class="form-check-input fs-5" type="checkbox" name="est_spectateur" id="perm-spectateur"
-                       {% if user and user.est_spectateur %}checked{% endif %}
-                       onchange="toggleSpectateur(this.checked)">
-                <label class="form-check-label fw-bold text-navy ms-2" for="perm-spectateur">
-                  <i class="bi bi-eye-fill text-info me-1"></i> Mode Spectateur / Consultation seule (Recommandé pour PDG & DG)
-                </label>
-              </div>
-              <div class="small text-muted mt-1 ps-4 ms-2">
-                L'utilisateur peut <strong>tout voir</strong> (tableau de bord, historique, état des pièces, fournisseurs) et <strong>imprimer tous les bons et PDF</strong>, mais ne peut effectuer aucune modification, validation ou action opérationnelle.
-              </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6 col-sm-6">
+              <button type="button" class="btn btn-outline-info w-100 text-start p-3 h-100 shadow-xs" onclick="appliquerProfil('spectateur')">
+                <div class="fw-bold text-dark"><i class="bi bi-eye-fill text-info me-2 fs-5"></i>Spectateur (PDG / DG)</div>
+                <small class="text-muted d-block mt-1">Consultation totale et impression des bons. Aucune écriture ni validation.</small>
+              </button>
+            </div>
+            <div class="col-md-6 col-sm-6">
+              <button type="button" class="btn btn-outline-primary w-100 text-start p-3 h-100 shadow-xs" onclick="appliquerProfil('dt')">
+                <div class="fw-bold text-dark"><i class="bi bi-shield-shaded text-primary me-2 fs-5"></i>Direction Technique</div>
+                <small class="text-muted d-block mt-1">Accès complet : validation transmission, stock, création, annulation et gestion.</small>
+              </button>
+            </div>
+            <div class="col-md-6 col-sm-6">
+              <button type="button" class="btn btn-outline-success w-100 text-start p-3 h-100 shadow-xs" onclick="appliquerProfil('magasinier')">
+                <div class="fw-bold text-dark"><i class="bi bi-box-seam-fill text-success me-2 fs-5"></i>Magasinier (Stock)</div>
+                <small class="text-muted d-block mt-1">Réception des pièces, pointage, création de BDC et remise transporteur.</small>
+              </button>
+            </div>
+            <div class="col-md-6 col-sm-6">
+              <button type="button" class="btn btn-outline-purple w-100 text-start p-3 h-100 shadow-xs" style="border-color: #c4b5fd;" onclick="appliquerProfil('transporteur')">
+                <div class="fw-bold text-dark"><i class="bi bi-truck text-purple me-2 fs-5"></i>Transporteur</div>
+                <small class="text-muted d-block mt-1">Habilité uniquement à enregistrer la remise/récupération des pièces.</small>
+              </button>
             </div>
           </div>
 
-          <!-- 2. Actions opérationnelles -->
-          <div id="section-actions-detaillees" class="row g-2 mb-4">
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs" style="border-left: 4px solid #2563eb !important;">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_creer_bdc" id="perm-creer"
-                         {% if user and (user.peut_creer_bdc or user.role in ['DT', 'Directeur Technique']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold text-primary" for="perm-creer">
-                    <i class="bi bi-pencil-square me-1"></i> Habilité à écrire / créer des bons de commande
+          <!-- Section avancée / permissions détaillées (Repliable) -->
+          <div class="mb-4">
+            <button class="btn btn-sm btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center py-2 px-3"
+                    type="button" data-bs-toggle="collapse" data-bs-target="#collapsePermissionsAvancees" aria-expanded="false">
+              <span><i class="bi bi-sliders me-2"></i>Réglages avancés des permissions (Optionnel)</span>
+              <i class="bi bi-chevron-down"></i>
+            </button>
+            
+            <div class="collapse mt-3" id="collapsePermissionsAvancees">
+              <div class="card card-body bg-light border p-3">
+                <!-- 1. Mode Spectateur Switch -->
+                <div class="form-check form-switch mb-3 p-2 bg-white rounded border">
+                  <input class="form-check-input fs-5 ms-0 me-2" type="checkbox" name="est_spectateur" id="perm-spectateur"
+                         {% if user and user.est_spectateur %}checked{% endif %}
+                         onchange="toggleSpectateur(this.checked)">
+                  <label class="form-check-label fw-bold text-navy" for="perm-spectateur">
+                    Mode Spectateur (Lecture seule / Sans modification)
                   </label>
                 </div>
-                <div class="small text-muted mt-1">Autorisation expresse accordée par le DT pour rédiger un BDC. Sans cette case cochée, l'utilisateur ne peut pas écrire de bon.</div>
-              </div>
-            </div>
 
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_valider_dt" id="perm-valider"
-                         {% if user and (user.peut_valider_dt or user.role == 'DT') and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-valider">
-                    <i class="bi bi-shield-check text-success me-1"></i> Valider la transmission des bons (Délégation DT)
-                  </label>
+                <!-- 2. Actions détaillées -->
+                <div id="section-actions-detaillees" class="row g-2">
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_creer_bdc" id="perm-creer"
+                             {% if user and (user.peut_creer_bdc or user.role in ['DT', 'Directeur Technique']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-creer">Création de bons de commande</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_valider_dt" id="perm-valider"
+                             {% if user and (user.peut_valider_dt or user.role == 'DT') and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-valider">Valider la transmission DT</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_gerer_stock" id="perm-stock"
+                             {% if user and (user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-stock">Gestion du stock & réceptions</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_recuperer" id="perm-recup"
+                             {% if user and (user.peut_recuperer or (user.can_recuperer and not user.est_spectateur)) %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-recup">Remise transporteur</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_cloturer" id="perm-cloturer"
+                             {% if user and (user.peut_cloturer or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-cloturer">Clôturer un bon</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_annuler" id="perm-annuler"
+                             {% if user and (user.peut_annuler or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-annuler">Annuler un bon</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_voir_historique" id="perm-hist"
+                             {% if user and (user.peut_voir_historique or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-hist">Accès Historique & Traçabilité</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_voir_archives" id="perm-arch"
+                             {% if user and (user.peut_voir_archives or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-semibold small" for="perm-arch">Accès Archives Mensuelles</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="form-check form-switch p-2 bg-white rounded border border-primary-subtle">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_gerer_utilisateurs" id="perm-admin"
+                             {% if user and (user.peut_gerer_utilisateurs or user.role == 'DT') and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-primary small" for="perm-admin">Administrer les comptes et mots de passe</label>
+                    </div>
+                  </div>
                 </div>
-                <div class="small text-muted mt-1">Autorisation expresse accordée par le DT pour valider la transmission des bons de commande aux fournisseurs. Sans cette validation, le bon reste obligatoirement en attente.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_gerer_stock" id="perm-stock"
-                         {% if user and (user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-stock">
-                    <i class="bi bi-box-seam text-warning me-1"></i> Pointer livraisons & gérer le stock
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Pointage pièce par pièce, réceptions partielles et mise en stock.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs" style="border-left: 4px solid #7c3aed !important;">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_recuperer" id="perm-recup"
-                         {% if user and (user.peut_recuperer or (user.can_recuperer and not user.est_spectateur)) %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-recup" style="color: #6d28d9;">
-                    <i class="bi bi-truck me-1" style="color: #7c3aed;"></i> Remise au transporteur (Prise en charge)
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Enregistrer la remise du bon et des pièces au transporteur.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_cloturer" id="perm-cloturer"
-                         {% if user and (user.peut_cloturer or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-cloturer">
-                    <i class="bi bi-lock-fill text-secondary me-1"></i> Clôturer définitivement un bon
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Verrouiller un bon arrivé au terme de son cycle.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_annuler" id="perm-annuler"
-                         {% if user and (user.peut_annuler or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-annuler">
-                    <i class="bi bi-trash text-danger me-1"></i> Annuler un bon de commande
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Annulation motivée avec motif obligatoire.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_voir_historique" id="perm-hist"
-                         {% if user and (user.peut_voir_historique or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-hist">
-                    <i class="bi bi-clock-history text-info me-1"></i> Accès à l'Historique & Traçabilité
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Consulter le journal chronologique et la traçabilité des bons.</div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_voir_archives" id="perm-arch"
-                         {% if user and (user.peut_voir_archives or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-arch">
-                    <i class="bi bi-archive text-warning me-1"></i> Accès aux Archives Mensuelles
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Consulter les dossiers et historiques indépendants archivés chaque fin de mois.</div>
-              </div>
-            </div>
-
-            <div class="col-12">
-              <div class="p-3 border rounded bg-white shadow-xs border-primary-subtle">
-                <div class="form-check form-switch">
-                  <input class="form-check-input perm-action" type="checkbox" name="peut_gerer_utilisateurs" id="perm-admin"
-                         {% if user and (user.peut_gerer_utilisateurs or user.role == 'DT') and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-bold text-navy" for="perm-admin">
-                    <i class="bi bi-people-fill text-primary me-1"></i> Administrer les comptes & permissions utilisateurs
-                  </label>
-                </div>
-                <div class="small text-muted mt-1">Donne accès à ce panneau d'administration des utilisateurs et à la gestion de leurs droits.</div>
               </div>
             </div>
           </div>
@@ -253,7 +228,7 @@
             <div>
               <button type="button" class="btn btn-outline-danger px-3 py-2"
                       onclick="if(confirm('⚠️ Êtes-vous certain de vouloir SUPPRIMER DÉFINITIVEMENT cet utilisateur ?\nCette action est irréversible.')) { document.getElementById('form-delete-user').submit(); }">
-                <i class="bi bi-trash3 me-1"></i>Supprimer définitivement cet utilisateur
+                <i class="bi bi-trash3 me-1"></i>Supprimer
               </button>
             </div>
             {% endif %}
@@ -268,6 +243,29 @@
 </div>
 
 <script>
+function toggleFormPassword() {
+  const pwInput = document.getElementById('input_form_password');
+  const icon = document.getElementById('icon_toggle_form_pw');
+  if (pwInput.type === 'password') {
+    pwInput.type = 'text';
+    icon.className = 'bi bi-eye-slash text-danger';
+  } else {
+    pwInput.type = 'password';
+    icon.className = 'bi bi-eye';
+  }
+}
+
+function genererPasswordForm() {
+  var mots = ['Taxi', 'Garage', 'Gabon', 'Piece', 'Auto', 'Moteur'];
+  var mot = mots[Math.floor(Math.random() * mots.length)];
+  var num = Math.floor(100 + Math.random() * 900);
+  var pw = mot + '@' + num + '!';
+  var pwInput = document.getElementById('input_form_password');
+  pwInput.value = pw;
+  pwInput.type = 'text';
+  document.getElementById('icon_toggle_form_pw').className = 'bi bi-eye-slash text-danger';
+}
+
 function toggleSpectateur(isSpectateur) {
   const actions = document.querySelectorAll('.perm-action');
   if (isSpectateur) {
@@ -292,6 +290,8 @@ function appliquerProfil(type) {
   const cloturer = document.getElementById('perm-cloturer');
   const annuler = document.getElementById('perm-annuler');
   const admin = document.getElementById('perm-admin');
+  const hist = document.getElementById('perm-hist');
+  const arch = document.getElementById('perm-arch');
 
   if (type === 'spectateur') {
     spectateur.checked = true;
@@ -309,6 +309,8 @@ function appliquerProfil(type) {
     cloturer.checked = true;
     annuler.checked = true;
     admin.checked = true;
+    if (hist) hist.checked = true;
+    if (arch) arch.checked = true;
     if (!roleInput.value) roleInput.value = 'Directeur Technique (DT)';
   } else if (type === 'magasinier') {
     spectateur.checked = false;
@@ -320,17 +322,22 @@ function appliquerProfil(type) {
     cloturer.checked = false;
     annuler.checked = false;
     admin.checked = false;
+    if (hist) hist.checked = true;
+    if (arch) arch.checked = false;
     if (!roleInput.value) roleInput.value = 'Magasinier';
-  } else if (type === 'reset') {
+  } else if (type === 'transporteur') {
     spectateur.checked = false;
     toggleSpectateur(false);
     creer.checked = false;
     valider.checked = false;
     stock.checked = false;
-    recup.checked = false;
+    recup.checked = true;
     cloturer.checked = false;
     annuler.checked = false;
     admin.checked = false;
+    if (hist) hist.checked = false;
+    if (arch) arch.checked = false;
+    if (!roleInput.value) roleInput.value = 'Transporteur / Chauffeur';
   }
 }
 

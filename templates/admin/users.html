@@ -5,78 +5,114 @@
 {% block content %}
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
-    <h6 class="mb-0 fw-bold text-navy">
-      <i class="bi bi-people me-2"></i>{{ users|length }} utilisateur(s)
-    </h6>
+    <div>
+      <h6 class="mb-0 fw-bold text-navy">
+        <i class="bi bi-people me-2"></i>{{ users|length }} compte(s) utilisateur(s)
+      </h6>
+      <small class="text-muted">Visualisez, gérez et modifiez les mots de passe et rôles de vos collaborateurs.</small>
+    </div>
     <a href="{{ url_for('admin_user_create') }}" class="btn btn-sm btn-primary-navy">
       <i class="bi bi-person-plus me-1"></i>Nouvel utilisateur
     </a>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead class="table-light">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light small">
           <tr>
-            <th>Nom complet</th>
+            <th>Utilisateur</th>
             <th>Identifiant</th>
-            <th>Rôle (Fonction)</th>
-            <th>Autorisations & Droits</th>
+            <th>Rôle / Profil</th>
+            <th>Mot de passe</th>
             <th>Statut</th>
-            <th>Actions</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for user in users %}
-          <tr class="{% if not user.actif %}text-muted table-light{% endif %} align-middle">
+          <tr class="{% if not user.actif %}text-muted table-light{% endif %}">
             <td>
               <div class="d-flex align-items-center gap-2">
                 <div class="avatar-circle avatar-sm">{{ user.nom_complet[0] }}</div>
                 <div>
                   <div class="fw-semibold text-navy">{{ user.nom_complet }}</div>
-                  <div class="text-muted small">Créé le {{ user.date_creation.strftime('%d/%m/%Y') }}</div>
+                  <div class="text-muted" style="font-size: 0.72rem;">Créé le {{ user.date_creation.strftime('%d/%m/%Y') }}</div>
                 </div>
               </div>
             </td>
             <td><code>{{ user.username }}</code></td>
             <td>
-              <span class="badge bg-navy-soft text-navy fs-7 px-2 py-1">{{ user.role_label }}</span>
+              <span class="badge bg-{{ user.profil_simple_badge.color }} text-white px-2 py-1 mb-1">
+                <i class="bi {{ user.profil_simple_badge.icon }} me-1"></i>{{ user.profil_simple_badge.label }}
+              </span>
+              {% if user.role and user.role != user.profil_simple_badge.label %}
+              <div class="small text-muted">{{ user.role }}</div>
+              {% endif %}
             </td>
             <td>
-              {% if user.est_spectateur %}
-                <span class="badge bg-info text-dark">
-                  <i class="bi bi-eye-fill me-1"></i>Spectateur (Consultation & Impression)
+              <!-- AFFICHAGE ET GESTION DU MOT DE PASSE EN CLAIR -->
+              <div class="d-flex align-items-center gap-1 bg-light p-1 px-2 rounded border" style="max-width: 220px;">
+                <span class="font-monospace fw-bold small text-navy" id="pw-text-{{ user.id }}" data-full="{{ user.mot_de_passe_clair or '' }}">
+                  ••••••••
                 </span>
-              {% else %}
-                <div class="d-flex flex-wrap gap-1" style="max-width: 320px;">
-                  {% if user.can_creer_bdc %}
-                    <span class="badge bg-primary-soft text-primary border" title="Habilité à créer / écrire des bons"><i class="bi bi-pencil-square me-1"></i>Création BDC</span>
-                  {% endif %}
-                  {% if user.can_valider_dt %}
-                    <span class="badge bg-success-soft text-success border" title="Habilité par le DT à valider la transmission"><i class="bi bi-shield-check me-1"></i>Validation Transmission DT</span>
-                  {% endif %}
-                  {% if user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier'] %}
-                    <span class="badge bg-warning-soft text-dark border" title="Peut pointer et gérer les réceptions">Stock / Réception</span>
-                  {% endif %}
-                  {% if user.peut_recuperer or (user.can_recuperer and not user.est_spectateur) %}
-                    <span class="badge border" style="background-color: #f3e8ff !important; color: #7c3aed !important; border-color: #c4b5fd !important; font-weight: 600;" title="Peut valider la remise / récupération transporteur"><i class="bi bi-truck me-1"></i>Remise transporteur</span>
-                  {% endif %}
-                  {% if user.peut_cloturer or user.role in ['DT', 'DTA'] %}
-                    <span class="badge bg-secondary-soft text-secondary border" title="Peut clôturer un bon">Clôture</span>
-                  {% endif %}
-                  {% if user.peut_annuler or user.role in ['DT', 'DTA'] %}
-                    <span class="badge bg-danger-soft text-danger border" title="Peut annuler">Annulation</span>
-                  {% endif %}
-                  {% if user.peut_voir_historique or (user.can_voir_historique and not user.est_spectateur) %}
-                    <span class="badge bg-info-soft text-info border" title="Peut consulter l'historique"><i class="bi bi-clock-history me-1"></i>Historique</span>
-                  {% endif %}
-                  {% if user.peut_voir_archives or (user.can_voir_archives and not user.est_spectateur) %}
-                    <span class="badge bg-warning-soft text-dark border" title="Peut consulter les archives"><i class="bi bi-archive me-1"></i>Archives</span>
-                  {% endif %}
-                  {% if user.peut_gerer_utilisateurs or user.role == 'DT' %}
-                    <span class="badge bg-dark text-white border" title="Administrateur des comptes">Admin</span>
-                  {% endif %}
+                
+                {% if user.mot_de_passe_clair %}
+                <!-- Bouton Afficher / Masquer -->
+                <button type="button" class="btn btn-sm btn-link text-secondary p-0 px-1 ms-auto"
+                        onclick="togglePasswordVisibility({{ user.id }})" title="Afficher / Masquer le mot de passe">
+                  <i class="bi bi-eye" id="pw-eye-{{ user.id }}"></i>
+                </button>
+                <!-- Bouton Copier -->
+                <button type="button" class="btn btn-sm btn-link text-secondary p-0 px-1"
+                        onclick="copierPassword('{{ user.mot_de_passe_clair }}', 'Mot de passe de {{ user.nom_complet }} copié !')" title="Copier le mot de passe">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+                {% else %}
+                <span class="badge bg-light text-muted border ms-auto" style="font-size: 0.68rem;" title="Mot de passe chiffré. Vous pouvez le redéfinir en un clic.">Chiffré</span>
+                {% endif %}
+
+                <!-- Bouton Modification rapide -->
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 ms-1" style="font-size: 0.72rem;"
+                        data-bs-toggle="modal" data-bs-target="#modal-quick-pw-{{ user.id }}" title="Changer le mot de passe en 1 clic">
+                  <i class="bi bi-key-fill"></i>
+                </button>
+              </div>
+
+              <!-- MODALE RAPIDE DE MODIFICATION DE MOT DE PASSE -->
+              <div class="modal fade" id="modal-quick-pw-{{ user.id }}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                  <div class="modal-content">
+                    <div class="modal-header bg-navy text-white py-2">
+                      <h6 class="modal-title fs-7">
+                        <i class="bi bi-key me-1"></i>Mot de passe : {{ user.username }}
+                      </h6>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('admin_user_quick_password', id=user.id) }}">
+                      <div class="modal-body py-3">
+                        <div class="small text-muted mb-2">Utilisateur : <strong>{{ user.nom_complet }}</strong></div>
+                        <label class="form-label small fw-semibold">Nouveau mot de passe :</label>
+                        <div class="input-group input-group-sm mb-2">
+                          <input type="text" name="nouveau_mot_de_passe" id="input-pw-{{ user.id }}"
+                                 class="form-control font-monospace fw-bold" required
+                                 placeholder="ex: Taxi@2026!" value="{{ user.mot_de_passe_clair or '' }}">
+                          <button class="btn btn-outline-secondary" type="button"
+                                  onclick="genererMotDePasse('input-pw-{{ user.id }}')" title="Générer un mot de passe simple">
+                            <i class="bi bi-magic"></i>
+                          </button>
+                        </div>
+                        <div class="form-text" style="font-size: 0.72rem;">
+                          Ce mot de passe sera immédiatement actif et visible par l'administrateur.
+                        </div>
+                      </div>
+                      <div class="modal-footer py-2 bg-light">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-success btn-sm fw-semibold">Enregistrer</button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-              {% endif %}
+              </div>
             </td>
             <td>
               {% if user.actif %}
@@ -85,10 +121,10 @@
                 <span class="badge bg-secondary">Désactivé</span>
               {% endif %}
             </td>
-            <td>
-              <div class="d-flex gap-1 align-items-center">
+            <td class="text-end">
+              <div class="d-flex gap-1 justify-content-end align-items-center">
                 <a href="{{ url_for('admin_user_edit', id=user.id) }}"
-                   class="btn btn-sm btn-outline-secondary" title="Modifier">
+                   class="btn btn-sm btn-outline-secondary" title="Modifier le compte et ses permissions">
                   <i class="bi bi-pencil"></i>
                 </a>
                 {% if user.id != current_user.id %}
@@ -101,7 +137,7 @@
                 </form>
                 <!-- Supprimer définitivement -->
                 <form method="POST" action="{{ url_for('admin_user_delete', id=user.id) }}" class="d-inline"
-                      onsubmit="return confirm('⚠️ Êtes-vous sûr de vouloir SUPPRIMER DÉFINITIVEMENT l\'utilisateur « {{ user.nom_complet }} » ? Il ne sera plus visible nulle part dans votre gestion d\'utilisateurs.')">
+                      onsubmit="return confirm('⚠️ Êtes-vous sûr de vouloir SUPPRIMER DÉFINITIVEMENT l\'utilisateur « {{ user.nom_complet }} » ? Il ne sera plus visible nulle part.')">
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer définitivement">
                     <i class="bi bi-trash3-fill"></i>
                   </button>
@@ -116,4 +152,37 @@
     </div>
   </div>
 </div>
+
+<script>
+function togglePasswordVisibility(userId) {
+  var span = document.getElementById('pw-text-' + userId);
+  var icon = document.getElementById('pw-eye-' + userId);
+  var fullPw = span.getAttribute('data-full');
+  
+  if (!fullPw) return;
+
+  if (span.textContent.trim() === '••••••••') {
+    span.textContent = fullPw;
+    icon.className = 'bi bi-eye-slash text-danger';
+  } else {
+    span.textContent = '••••••••';
+    icon.className = 'bi bi-eye';
+  }
+}
+
+function copierPassword(texte, message) {
+  if (!texte) return;
+  navigator.clipboard.writeText(texte).then(function() {
+    alert(message || 'Mot de passe copié dans le presse-papier !');
+  });
+}
+
+function genererMotDePasse(targetInputId) {
+  var mots = ['Taxi', 'Garage', 'Gabon', 'Piece', 'Auto', 'Moteur'];
+  var mot = mots[Math.floor(Math.random() * mots.length)];
+  var num = Math.floor(100 + Math.random() * 900);
+  var pw = mot + '@' + num + '!';
+  document.getElementById(targetInputId).value = pw;
+}
+</script>
 {% endblock %}

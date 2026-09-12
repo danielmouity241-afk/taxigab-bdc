@@ -12,12 +12,13 @@ db = SQLAlchemy()
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id             = db.Column(db.Integer, primary_key=True)
-    username       = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash  = db.Column(db.String(256), nullable=False)
-    nom_complet    = db.Column(db.String(128), nullable=False)
-    role           = db.Column(db.String(128), nullable=False)  # Titre libre manuel (ex: Président Directeur Général, Magasinier...)
-    actif          = db.Column(db.Boolean, default=True)
-    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+    username           = db.Column(db.String(64), unique=True, nullable=False)
+    password_hash      = db.Column(db.String(256), nullable=False)
+    mot_de_passe_clair = db.Column(db.String(128), nullable=True)  # Mot de passe lisible pour l'administrateur
+    nom_complet        = db.Column(db.String(128), nullable=False)
+    role               = db.Column(db.String(128), nullable=False)  # Titre libre manuel (ex: Président Directeur Général, Magasinier...)
+    actif              = db.Column(db.Boolean, default=True)
+    date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Permissions granulaires personnalisables
     peut_creer_bdc           = db.Column(db.Boolean, default=False)
@@ -38,9 +39,24 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        self.mot_de_passe_clair = password
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def profil_simple_badge(self):
+        if self.est_spectateur:
+            return {'label': 'Spectateur (Lecture seule)', 'color': 'info', 'icon': 'bi-eye-fill'}
+        if self.role in ('DT', 'Directeur Technique') or (self.peut_valider_dt and self.peut_gerer_utilisateurs):
+            return {'label': 'Direction Technique (Admin)', 'color': 'primary', 'icon': 'bi-shield-shaded'}
+        if self.role in ('DTA', 'Directeur Technique Adjoint'):
+            return {'label': 'Dir. Technique Adjointe', 'color': 'primary', 'icon': 'bi-shield-check'}
+        if self.role in ('magasinier', 'Magasinier') or self.peut_gerer_stock:
+            return {'label': 'Magasinier / Stock', 'color': 'success', 'icon': 'bi-box-seam-fill'}
+        if self.role in ('transporteur', 'Transporteur') or self.peut_recuperer:
+            return {'label': 'Transporteur / Chauffeur', 'color': 'purple', 'icon': 'bi-truck'}
+        return {'label': self.role_label, 'color': 'secondary', 'icon': 'bi-person-badge'}
 
     @property
     def role_label(self):
