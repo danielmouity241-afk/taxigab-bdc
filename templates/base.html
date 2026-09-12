@@ -103,9 +103,15 @@
         <div class="nav-section-label">ADMINISTRATION</div>
       </li>
       <li class="nav-item">
-        <a class="nav-link {% if 'admin' in request.endpoint %}active{% endif %}"
+        <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}"
            href="{{ url_for('admin_users') }}">
           <i class="bi bi-people me-2"></i> Utilisateurs
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'admin_whatsapp' %}active{% endif %}"
+           href="{{ url_for('admin_whatsapp') }}">
+          <i class="bi bi-whatsapp me-2 text-success"></i> Passerelle WhatsApp
         </a>
       </li>
       {% endif %}
