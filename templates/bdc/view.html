@@ -543,11 +543,11 @@
         </div>
         {% endif %}
 
-        <!-- 1. VALIDATION DT (si en attente) -->
+        <!-- 1. VALIDATION DE TRANSMISSION (DT ou habilité) -->
         {% if peut_valider and bdc.statut == 'en_attente' %}
         <button type="button" class="btn btn-success fw-semibold"
                 data-bs-toggle="modal" data-bs-target="#modal-valider">
-          <i class="bi bi-check-circle me-2"></i>Valider le bon (DT)
+          <i class="bi bi-check-circle me-2"></i>Valider la transmission du bon (DT)
         </button>
         <button type="button" class="btn btn-outline-danger fw-semibold"
                 data-bs-toggle="modal" data-bs-target="#modal-refus-validation">
@@ -555,8 +555,8 @@
         </button>
         {% endif %}
 
-        <!-- 2. LIVRAISON PAR LE FOURNISSEUR (si validé ou en attente) -->
-        {% if peut_gerer_stock and bdc.statut in ['validee', 'en_attente'] %}
+        <!-- 2. LIVRAISON PAR LE FOURNISSEUR (strictement si validé) -->
+        {% if peut_gerer_stock and bdc.statut == 'validee' %}
         <button type="button" class="btn btn-info text-white fw-semibold"
                 data-bs-toggle="modal" data-bs-target="#modal-livrer">
           <i class="bi bi-box-seam me-2"></i>Marquer comme Livrée
@@ -678,19 +678,27 @@
 
 <!-- ── MODALS D'ACTION ─────────────────────────────────────────────────── -->
 
-<!-- Valider DT -->
+<!-- Valider transmission DT -->
 <div class="modal fade" id="modal-valider" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h6 class="modal-title"><i class="bi bi-check-circle me-2"></i>Valider le bon N°{{ bdc.numero }}</h6>
+        <h6 class="modal-title"><i class="bi bi-shield-check me-2"></i>Valider la transmission — Bon N°{{ bdc.numero_affiche }}</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">Confirmer la validation du bon N°{{ bdc.numero }} ?</div>
+      <div class="modal-body">
+        <p class="mb-2">Confirmer la <strong>validation de transmission</strong> du bon N°<strong>{{ bdc.numero_affiche }}</strong> ?</p>
+        <div class="small text-muted bg-light p-2 rounded border">
+          <i class="bi bi-info-circle me-1 text-primary"></i>
+          Ce bon deviendra officiellement validé et sera immédiatement transmis au fournisseur (avec envoi automatique WhatsApp si configuré).
+        </div>
+      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
         <form method="POST" action="{{ url_for('bdc_valider', id=bdc.id) }}" class="d-inline">
-          <button type="submit" class="btn btn-success btn-sm">Valider</button>
+          <button type="submit" class="btn btn-success btn-sm fw-semibold">
+            <i class="bi bi-check-circle me-1"></i>Valider la transmission
+          </button>
         </form>
       </div>
     </div>
