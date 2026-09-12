@@ -75,7 +75,9 @@ def create_app():
     def peut_creer_bdc(user):
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
             return False
-        return bool(getattr(user, 'peut_creer_bdc', False) or user.role in ('DT', 'DTA', 'magasinier'))
+        if user.role in ('DT', 'Directeur Technique') or getattr(user, 'is_directeur_technique', False):
+            return True
+        return bool(getattr(user, 'peut_creer_bdc', False))
 
     def peut_annuler(user, bdc=None):
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
@@ -271,7 +273,8 @@ def create_app():
     @login_required
     def bdc_create():
         if not peut_creer_bdc(current_user):
-            abort(403)
+            flash("Accès refusé : la rédaction d'un bon de commande est réservée au Directeur Technique ou aux collaborateurs habilités par lui.", "danger")
+            return redirect(url_for('bdc_list'))
 
         if request.method == 'POST':
             type_bon             = request.form.get('type_bon', 'vehicule').strip()
