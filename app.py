@@ -70,7 +70,9 @@ def create_app():
     def peut_valider_dt(user):
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
             return False
-        return bool(getattr(user, 'peut_valider_dt', False) or user.role == 'DT')
+        if user.role in ('DT', 'Directeur Technique') or getattr(user, 'is_directeur_technique', False):
+            return True
+        return bool(getattr(user, 'peut_valider_dt', False))
 
     def peut_creer_bdc(user):
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
@@ -316,7 +318,15 @@ def create_app():
                                        service_defaut=current_user.role_label,
                                        fournisseurs_carnet=fournisseurs_carnet)
 
-            statut_initial = 'validee' if current_user.role == 'DT' else 'en_attente'
+            # Condition stricte : si le DT ou la personne habilitée par le DT ne valide pas la transmission du bon,
+            # la validation pour la création d'un bon de commande ne peut pas se faire.
+            valider_trans = request.form.get('valider_transmission') in ('1', 'true', 'on')
+            est_habilite_validation = peut_valider_dt(current_user)
+
+            if est_habilite_validation and valider_trans:
+                statut_initial = 'validee'
+            else:
+                statut_initial = 'en_attente'
 
             # Créer ou mettre à jour le fournisseur dans le carnet
             if fournisseur:
@@ -342,7 +352,7 @@ def create_app():
                 observations_generales=observations,
                 statut=statut_initial,
             )
-            if current_user.role == 'DT':
+            if statut_initial == 'validee':
                 bdc.validateur_dt_id = current_user.id
                 bdc.date_validation_dt = datetime.now()
 
@@ -365,13 +375,43 @@ def create_app():
 
             enregistrer_action(bdc, 'creation', nouveau_statut=statut_initial,
                                 details=f"Bon créé par {current_user.nom_complet} ({current_user.role_label})")
-            if current_user.role == 'DT':
+            if statut_initial == 'validee':
                 enregistrer_action(bdc, 'validation_dt',
                                     ancien_statut='en_attente', nouveau_statut='validee',
-                                    details='Validation automatique (créé par le DT)')
+                                    details=f"Transmission validée dès création par {current_user.nom_complet} ({current_user.role_label})")
 
             db.session.commit()
-            flash(f'Bon de commande N°{bdc.numero} créé avec succès !', 'success')
+
+            # Si validé dès la création par le DT ou la personne habilitée, expédier automatiquement par WhatsApp si actif
+            if statut_initial == 'validee':
+                auto_wa = ConfigurationSysteme.get('whatsapp_auto_validation', 'false').lower() == 'true'
+                if auto_wa and bdc.fournisseur_whatsapp:
+                    base_url = request.host_url.rstrip('/')
+                    if 'taxigab-bdc.com' in request.host:
+                        base_url = 'https://taxigab-bdc.com'
+                    lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
+                    dest_nom = bdc.fournisseur or 'Fournisseur'
+                    msg_wa = (
+                        f"Bonjour {dest_nom},\n\n"
+                        f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+                        f"validé par la Direction Technique.\n\n"
+                        f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
+                        f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+                        f"Direction Technique TAXI GAB+"
+                    )
+                    succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+                    if succes:
+                        bdc.whatsapp_envoye = True
+                        bdc.date_envoi_whatsapp = datetime.now()
+                        enregistrer_action(bdc, 'envoi_whatsapp', details=f"Automatique après validation création DT à {bdc.fournisseur_whatsapp} ({detail})")
+                        db.session.commit()
+                        flash(f'Bon de commande N°{bdc.numero} créé, validé et transmis automatiquement au fournisseur sur WhatsApp !', 'success')
+                        return redirect(url_for('bdc_view', id=bdc.id))
+
+                flash(f'Bon de commande N°{bdc.numero} créé et validé avec succès !', 'success')
+            else:
+                flash(f'Bon de commande N°{bdc.numero} créé et placé en attente : sa validation est soumise à la validation de transmission par la Direction Technique.', 'info')
+
             return redirect(url_for('bdc_view', id=bdc.id))
 
         fournisseurs_carnet = Fournisseur.query.order_by(Fournisseur.nom.asc()).all()
@@ -508,7 +548,7 @@ def create_app():
         bdc.date_validation_dt = datetime.now()
         bdc.ensure_code_securise()
         enregistrer_action(bdc, 'validation_dt', ancien_statut=ancien, nouveau_statut='validee',
-                            details=f"Validé par {current_user.nom_complet}")
+                            details=f"Transmission validée par {current_user.nom_complet}")
         db.session.commit()
 
         # Envoi automatique par le serveur si l'option est activée
@@ -533,10 +573,10 @@ def create_app():
                 bdc.date_envoi_whatsapp = datetime.now()
                 enregistrer_action(bdc, 'envoi_whatsapp', details=f"Automatique après validation DT à {bdc.fournisseur_whatsapp} ({detail})")
                 db.session.commit()
-                flash(f'Bon N°{bdc.numero} validé avec succès et transmis automatiquement au fournisseur sur WhatsApp !', 'success')
+                flash(f'Transmission du bon N°{bdc.numero} validée avec succès et transmise automatiquement au fournisseur sur WhatsApp !', 'success')
                 return redirect(url_for('bdc_view', id=id))
 
-        flash(f'Bon N°{bdc.numero} validé avec succès.', 'success')
+        flash(f'Transmission du bon N°{bdc.numero} validée avec succès.', 'success')
         return redirect(url_for('bdc_view', id=id))
 
     # ─── REFUSER VALIDATION (DT) ──────────────────────────────────────────
@@ -570,8 +610,8 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
-        if bdc.statut not in ('validee', 'en_attente'):
-            flash('Ce bon ne peut pas être marqué comme livré dans son état actuel.', 'warning')
+        if bdc.statut != 'validee':
+            flash("Ce bon ne peut pas être marqué comme livré car sa transmission n'a pas encore été validée par la Direction Technique.", 'warning')
             return redirect(url_for('bdc_view', id=id))
 
         ancien = bdc.statut
@@ -615,8 +655,8 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
-        if bdc.statut not in ('en_stock', 'livree', 'validee', 'en_attente'):
-            flash('Ce bon ne peut pas être marqué comme récupéré dans son état actuel.', 'warning')
+        if bdc.statut not in ('en_stock', 'livree', 'validee'):
+            flash("Ce bon ne peut pas être marqué comme récupéré car sa transmission n'a pas encore été validée par la Direction Technique.", 'warning')
             return redirect(url_for('bdc_view', id=id))
 
         recuperateur = request.form.get('nom_recuperateur', '').strip() or bdc.transporteur or current_user.nom_complet or 'Transporteur'
