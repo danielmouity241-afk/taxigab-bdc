@@ -202,22 +202,40 @@
         <i class="bi bi-send me-2"></i>Soumettre le bon
       </div>
       <div class="card-body">
-        {% if current_user.role == 'DT' %}
-        <div class="alert alert-success py-2 small">
-          <i class="bi bi-check-circle me-1"></i>
-          En tant que DT, votre bon sera <strong>automatiquement validé</strong> à la création.
+        <div class="mb-3">
+          <label class="form-label fw-bold text-navy mb-2">
+            <i class="bi bi-shield-check me-1 text-primary"></i>Validation de la transmission
+          </label>
+          {% if current_user.can_valider_dt %}
+          <div class="p-3 bg-light rounded border border-success-subtle mb-2">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" name="valider_transmission" id="valider_transmission" value="1" checked onchange="toggleBoutonSubmit(this.checked)">
+              <label class="form-check-label fw-bold text-success" for="valider_transmission">
+                <i class="bi bi-check-circle-fill me-1"></i> Valider la transmission du bon
+              </label>
+            </div>
+            <div class="small text-muted">
+              En tant que Directeur Technique ou personne habilitée, valider la transmission permet de rendre le bon officiel dès sa création et d'autoriser sa transmission directe au fournisseur.
+            </div>
+          </div>
+          {% else %}
+          <div class="alert alert-warning py-2 px-3 small mb-2 border border-warning-subtle">
+            <div class="fw-bold mb-1 text-dark">
+              <i class="bi bi-lock-fill text-warning me-1"></i>Validation de transmission requise
+            </div>
+            <span>Si le Directeur Technique ou la personne habilitée par le DT ne valide pas la transmission du bon, la validation pour la création d'un bon de commande ne peut pas se faire.</span>
+            <div class="mt-2 text-secondary">
+              Ce bon sera enregistré en <strong>« En attente de validation »</strong> jusqu'au visa de la Direction Technique.
+            </div>
+          </div>
+          <input type="hidden" name="valider_transmission" value="0">
+          {% endif %}
         </div>
-        {% else %}
-        <div class="alert alert-info py-2 small">
-          <i class="bi bi-info-circle me-1"></i>
-          Votre bon sera soumis au Directeur Technique pour validation avant transmission.
-        </div>
-        {% endif %}
 
         <div class="d-grid gap-2 mt-3">
-          <button type="submit" class="btn btn-primary-navy btn-lg fw-semibold">
+          <button type="submit" id="btn-submit-bdc" class="btn btn-primary-navy btn-lg fw-semibold">
             <i class="bi bi-send-fill me-2"></i>
-            {% if current_user.role == 'DT' %}Créer & Valider{% else %}Soumettre{% endif %}
+            <span id="btn-submit-text">{% if current_user.can_valider_dt %}Créer & Valider la transmission{% else %}Créer (En attente de validation DT){% endif %}</span>
           </button>
           <a href="{{ url_for('bdc_list') }}" class="btn btn-outline-secondary">
             <i class="bi bi-x-lg me-2"></i>Annuler
@@ -238,6 +256,13 @@
 {% block extra_js %}
 <script>
 let ligneCount = 1;
+
+function toggleBoutonSubmit(checked) {
+  const btnText = document.getElementById('btn-submit-text');
+  if (btnText) {
+    btnText.textContent = checked ? 'Créer & Valider la transmission' : 'Créer (En attente de validation DT)';
+  }
+}
 
 function ajouterLigne() {
   ligneCount++;
