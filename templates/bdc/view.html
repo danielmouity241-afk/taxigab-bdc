@@ -471,28 +471,53 @@
           </ul>
         </div>
 
-        <!-- ENVOI WHATSAPP DU BON VALIDÉ AU FOURNISSEUR -->
+        <!-- ENVOI WHATSAPP & SUIVI DES RELANCES AU FOURNISSEUR -->
         {% if bdc.statut in ['validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'] %}
         <div class="card border border-success bg-success bg-opacity-10 p-3 rounded mb-2">
           <div class="d-flex align-items-center justify-content-between mb-2">
             <span class="fw-bold text-success d-flex align-items-center">
-              <i class="bi bi-whatsapp fs-5 me-1 text-success"></i> Notification Fournisseur
+              <i class="bi bi-whatsapp fs-5 me-1 text-success"></i> Notification & Relances
             </span>
             {% if bdc.whatsapp_envoye %}
-            <span class="badge bg-success text-white"><i class="bi bi-check-all me-1"></i>Déjà expédié</span>
+            <span class="badge bg-success text-white"><i class="bi bi-check-all me-1"></i>Transmis</span>
             {% else %}
             <span class="badge bg-warning text-dark">Prêt à envoyer</span>
             {% endif %}
           </div>
 
+          <!-- Alerte 24h si pièces en attente -->
+          {% if bdc.est_en_retard_24h %}
+          <div class="alert alert-danger border-danger p-2 mb-2 small shadow-xs">
+            <div class="fw-bold d-flex align-items-center justify-content-between">
+              <span><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Alerte délai : > 24h</span>
+              <span class="badge bg-danger">{{ bdc.delai_ecoule_heures }}h d'attente</span>
+            </div>
+            <div class="mt-1">
+              Validé depuis <strong>{{ bdc.delai_ecoule_heures }}h</strong> avec <strong>{{ bdc.total_pieces_en_attente }} pièce(s)</strong> toujours en attente de livraison.
+            </div>
+          </div>
+          {% endif %}
+
           {% if bdc.whatsapp_envoye and bdc.date_envoi_whatsapp %}
-          <div class="alert alert-success border-success py-2 px-3 mb-2 small d-flex align-items-center justify-content-between">
-            <span><i class="bi bi-check-circle-fill me-1 text-success"></i>Transmis au fournisseur</span>
-            <span class="text-muted" style="font-size:0.75rem;">{{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y %H:%M') }}</span>
+          <div class="alert alert-success border-success py-2 px-3 mb-2 small">
+            <div class="d-flex align-items-center justify-content-between">
+              <span><i class="bi bi-check-circle-fill me-1 text-success"></i>1ère transmission :</span>
+              <span class="text-muted fw-semibold" style="font-size:0.75rem;">{{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y %H:%M') }}</span>
+            </div>
+            {% if bdc.nb_relances_whatsapp and bdc.nb_relances_whatsapp > 0 %}
+            <div class="d-flex align-items-center justify-content-between mt-1 pt-1 border-top border-success-subtle">
+              <span class="badge bg-warning text-dark">
+                <i class="bi bi-arrow-repeat me-1"></i>{{ bdc.nb_relances_whatsapp }} relance(s) effectuée(s)
+              </span>
+              {% if bdc.date_derniere_relance %}
+              <span class="text-muted" style="font-size:0.72rem;">Dernière : {{ bdc.date_derniere_relance.strftime('%d/%m %H:%M') }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
           {% else %}
           <p class="small text-dark mb-2">
-            Transmettez automatiquement le bon de commande officiel et son lien PDF au fournisseur 
+            Transmettez le bon de commande officiel TAXI GAB+ et son lien PDF au fournisseur 
             <strong>{{ bdc.fournisseur or 'Fournisseur' }}</strong> directement depuis le serveur :
           </p>
           {% endif %}
@@ -513,20 +538,50 @@
           </div>
           {% endif %}
 
-          {% if current_user.is_directeur_technique or peut_valider %}
-          <!-- BOUTON ENVOI AUTOMATIQUE SERVEUR (RÉSERVÉ AU DIRECTEUR TECHNIQUE) -->
-          <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
-            <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-2"
+          {% if not bdc.whatsapp_envoye %}
+            {% if current_user.is_directeur_technique or peut_valider %}
+            <!-- BOUTON PREMIÈRE TRANSMISSION (SERVEUR) -->
+            <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
+              <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-2"
+                      {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
+                <i class="bi bi-robot me-2"></i> Transmettre au fournisseur (Serveur)
+              </button>
+            </form>
+            {% endif %}
+            <!-- OPTION SECONDAIRE MANUELLE VIA WHATSAPP WEB -->
+            <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-outline-success btn-sm w-100 mb-2" title="Ouvrir WhatsApp Web">
+              <i class="bi bi-whatsapp me-1"></i> Ouvrir sur WhatsApp Web
+            </a>
+          {% else %}
+            <!-- BOUTON DE RELANCE SPÉCIFIQUE AVEC LISTING DES PIÈCES MANQUANTES -->
+            {% if bdc.pieces_en_attente %}
+            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2"
+                    data-bs-toggle="modal" data-bs-target="#modal-relancer-whatsapp"
                     {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-              <i class="bi bi-robot me-2"></i> Envoyer directement (Serveur)
+              <i class="bi bi-arrow-repeat fs-5"></i>
+              <span>Relancer le Fournisseur</span>
+              {% if bdc.nb_relances_whatsapp and bdc.nb_relances_whatsapp > 0 %}
+              <span class="badge bg-dark text-white rounded-pill">{{ bdc.nb_relances_whatsapp }}</span>
+              {% endif %}
             </button>
-          </form>
-          {% endif %}
+            {% else %}
+            <div class="alert alert-light border-success text-success py-2 px-3 mb-2 small text-center fw-semibold">
+              <i class="bi bi-check-circle-fill me-1 text-success"></i>Toutes les pièces de ce bon ont été reçues
+            </div>
+            {% endif %}
 
-          <!-- OPTION SECONDAIRE MANUELLE VIA WHATSAPP WEB -->
-          <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-outline-success btn-sm w-100 mb-2" title="Ouvrir WhatsApp Web si vous préférez l'envoyer depuis votre compte local">
-            <i class="bi bi-whatsapp me-1"></i> Ouvrir sur WhatsApp Web (Optionnel)
-          </a>
+            <!-- BOUTON RÉ-EXPÉDITION COMPLÈTE DU BON INITIAL -->
+            <div class="d-flex gap-1 mb-2">
+              <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="flex-grow-1">
+                <button type="submit" class="btn btn-outline-success btn-sm w-100" title="Renvoyer le message de transmission initial">
+                  <i class="bi bi-send me-1"></i> Renvoyer bon initial
+                </button>
+              </form>
+              <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ouvrir WhatsApp Web">
+                <i class="bi bi-whatsapp"></i>
+              </a>
+            </div>
+          {% endif %}
 
           <div class="d-flex justify-content-between align-items-center pt-1 border-top">
             <a href="{{ lien_public_pdf }}" target="_blank" class="small text-navy text-decoration-none" title="Aperçu du lien fournisseur">
@@ -885,6 +940,78 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+<!-- MODAL DE RELANCE FOURNISSEUR (+24H / PIÈCES EN ATTENTE) -->
+<div class="modal fade text-start" id="modal-relancer-whatsapp" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-whatsapp me-2 text-success"></i>Relancer le Fournisseur pour les pièces en attente
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <span class="text-muted small">Fournisseur :</span>
+                <strong class="text-navy d-block fs-6">{{ bdc.fournisseur or 'Fournisseur externe' }}</strong>
+              </div>
+              <div class="text-end">
+                <span class="text-muted small">WhatsApp :</span>
+                <div class="fw-bold text-success"><i class="bi bi-whatsapp me-1"></i>{{ bdc.fournisseur_whatsapp or 'Non renseigné' }}</div>
+              </div>
+            </div>
+
+            <div class="alert alert-light border p-2 mb-3">
+              <div class="small fw-semibold text-danger mb-1">
+                <i class="bi bi-box-seam me-1"></i>Pièces toujours en attente de livraison ({{ bdc.total_pieces_en_attente }}) :
+              </div>
+              <ul class="mb-0 small ps-3">
+                {% for p in bdc.pieces_en_attente %}
+                <li>
+                  <strong>{{ p.quantite - (p.quantite_recue or 0) }}x</strong> {{ p.designation }}
+                  {% if p.quantite_recue %}<span class="text-muted">({{ p.quantite_recue }}/{{ p.quantite }} déjà reçues)</span>{% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 small text-muted">
+              <i class="bi bi-clock-history text-primary"></i>
+              <span>Statut des relances : <strong>{{ bdc.nb_relances_whatsapp or 0 }} rappel(s) déjà effectué(s)</strong></span>
+            </div>
+            {% if bdc.date_derniere_relance %}
+            <div class="small text-muted ms-4">
+              Dernière relance le {{ bdc.date_derniere_relance.strftime('%d/%m/%Y à %H:%M') }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-5">
+            <label class="form-label small fw-semibold text-muted">Aperçu du message WhatsApp qui sera transmis :</label>
+            <div class="p-2 bg-light rounded border small text-dark font-monospace" style="white-space: pre-wrap; font-size: 0.78rem; max-height: 220px; overflow-y: auto;">
+{{ msg_relance_wa }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+        <div class="d-flex gap-2">
+          <a href="{{ whatsapp_relance_url }}" target="_blank" class="btn btn-outline-success btn-sm fw-semibold">
+            <i class="bi bi-whatsapp me-1"></i> Ouvrir WhatsApp Web
+          </a>
+          <form method="POST" action="{{ url_for('bdc_relancer_whatsapp', id=bdc.id) }}" class="d-inline">
+            <button type="submit" class="btn btn-warning text-dark btn-sm fw-bold shadow-sm">
+              <i class="bi bi-send-fill me-1"></i> Envoyer la relance (Serveur)
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 </div>

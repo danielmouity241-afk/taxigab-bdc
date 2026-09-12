@@ -192,15 +192,20 @@ def create_app():
         # Derniers BDC
         recents = base_query.order_by(BonDeCommande.date_creation.desc()).limit(10).all()
 
-        # Alertes : BDC en attente de validation DT (si DT connecté)
+        # Alertes : BDC en attente de validation DT (si DT connecté ou habilité)
         alertes_validation = []
-        if current_user.role == 'DT':
+        if peut_valider_dt(current_user):
             alertes_validation = BonDeCommande.query.filter_by(statut='en_attente').all()
+
+        # Alertes Relances Fournisseurs (+24h sans réception complète)
+        bons_en_cours = BonDeCommande.query.filter(BonDeCommande.statut.in_(['validee', 'livree', 'en_stock', 'recuperee_transporteur'])).all()
+        alertes_relance_24h = [b for b in bons_en_cours if b.est_en_retard_24h]
 
         return render_template('dashboard.html',
                                stats=stats,
                                recents=recents,
-                               alertes_validation=alertes_validation)
+                               alertes_validation=alertes_validation,
+                               alertes_relance_24h=alertes_relance_24h)
 
     # ─── LISTE DES BDC ────────────────────────────────────────────────────
     @app.route('/bdc')
@@ -275,8 +280,7 @@ def create_app():
     @login_required
     def bdc_create():
         if not peut_creer_bdc(current_user):
-            flash("Accès refusé : la rédaction d'un bon de commande est réservée au Directeur Technique ou aux collaborateurs habilités par lui.", "danger")
-            return redirect(url_for('bdc_list'))
+            abort(403)
 
         if request.method == 'POST':
             type_bon             = request.form.get('type_bon', 'vehicule').strip()
@@ -452,11 +456,38 @@ def create_app():
         else:
             whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
 
+        # Message de relance spécifique listant les pièces en attente
+        pieces_manquantes_txt = ""
+        for p in bdc.pieces_en_attente:
+            qte_restante = p.quantite - (p.quantite_recue or 0)
+            pieces_manquantes_txt += f"• {qte_restante}x {p.designation}\n"
+
+        if not pieces_manquantes_txt.strip():
+            pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
+
+        msg_relance_wa = (
+            f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
+            f"Bonjour {dest_nom},\n\n"
+            f"Nous faisons suite au Bon de Commande officiel N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📦 Pièces toujours en attente de livraison au garage :\n"
+            f"{pieces_manquantes_txt}\n"
+            f"📄 Consultez votre bon officiel en ligne :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison de ces pièces au garage.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+        if phone_clean:
+            whatsapp_relance_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_relance_wa)}"
+        else:
+            whatsapp_relance_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_relance_wa)}"
+
         return render_template('bdc/view.html',
                                bdc=bdc,
                                whatsapp_url=whatsapp_url,
+                               whatsapp_relance_url=whatsapp_relance_url,
                                lien_public_pdf=lien_public_pdf,
                                msg_wa=msg_wa,
+                               msg_relance_wa=msg_relance_wa,
                                peut_valider=peut_valider_dt(current_user),
                                peut_annuler=peut_annuler(current_user, bdc),
                                peut_gerer_stock=peut_gerer_stock(current_user),
@@ -527,6 +558,68 @@ def create_app():
             flash(f"✅ Bon de commande transmis automatiquement avec succès au fournisseur via WhatsApp !", "success")
         else:
             flash(f"⚠️ Information envoi WhatsApp serveur : {detail}", "warning")
+
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── RELANCER LE FOURNISSEUR PAR WHATSAPP (+24H OU MANUEL) ───────────
+    @app.route('/bdc/<int:id>/relancer_whatsapp', methods=['POST'])
+    @login_required
+    def bdc_relancer_whatsapp(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+
+        if not est_directeur_technique(current_user) and not peut_valider_dt(current_user) and not current_user.peut_gerer_stock:
+            flash("Accès refusé : vous n'avez pas l'autorisation d'émettre une relance WhatsApp.", 'danger')
+            return redirect(url_for('bdc_view', id=id))
+
+        if not bdc.fournisseur_whatsapp:
+            flash("Aucun numéro WhatsApp n'est renseigné pour ce fournisseur. Veuillez renseigner le numéro ci-dessous.", 'danger')
+            return redirect(url_for('bdc_view', id=id))
+
+        if not bdc.code_securise:
+            bdc.ensure_code_securise()
+            db.session.commit()
+
+        base_url = request.host_url.rstrip('/')
+        if 'taxigab-bdc.com' in request.host:
+            base_url = 'https://taxigab-bdc.com'
+        lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
+
+        dest_nom = bdc.fournisseur or 'Fournisseur'
+        pieces_manquantes_txt = ""
+        for p in bdc.pieces_en_attente:
+            qte_restante = p.quantite - (p.quantite_recue or 0)
+            pieces_manquantes_txt += f"• {qte_restante}x {p.designation}\n"
+
+        if not pieces_manquantes_txt.strip():
+            pieces_manquantes_txt = "• (Toutes les pièces commandées)\n"
+
+        msg_relance_wa = (
+            f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
+            f"Bonjour {dest_nom},\n\n"
+            f"Nous faisons suite au Bon de Commande officiel N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📦 Pièces toujours en attente de livraison au garage :\n"
+            f"{pieces_manquantes_txt}\n"
+            f"📄 Consultez votre bon officiel en ligne :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison de ces pièces au garage.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+
+        succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_relance_wa, pdf_url=lien_public_pdf)
+        bdc.nb_relances_whatsapp = (bdc.nb_relances_whatsapp or 0) + 1
+        bdc.date_derniere_relance = datetime.now()
+        nb = bdc.nb_relances_whatsapp
+
+        enregistrer_action(bdc, 'relance_whatsapp',
+                           details=f"Relance N°{nb} émise à {bdc.fournisseur_whatsapp} ({detail}) par {current_user.nom_complet}")
+        db.session.commit()
+
+        if succes:
+            flash(f"✅ Relance N°{nb} transmise automatiquement avec succès au fournisseur sur WhatsApp !", "success")
+        else:
+            flash(f"ℹ️ Relance N°{nb} enregistrée. Information passerelle : {detail}", "info")
 
         return redirect(url_for('bdc_view', id=id))
 
@@ -1141,6 +1234,7 @@ def create_app():
         f_fournisseur = request.args.get('fournisseur', '')
         f_transporteur = request.args.get('transporteur', '')
         f_statut_rec = request.args.get('statut_reception', '')
+        f_relance = request.args.get('relance', '')
 
         if f_vehicule:
             q = q.filter(or_(
@@ -1154,15 +1248,26 @@ def create_app():
 
         bons = q.order_by(BonDeCommande.date_creation.desc()).all()
 
+        # Liste globale de tous les bons en retard à +24h (pour bandeau d'alerte)
+        bons_en_retard_24h = [b for b in bons if b.est_en_retard_24h]
+
+        if f_relance == 'retard_24h':
+            bons = [b for b in bons if b.est_en_retard_24h]
+        elif f_relance == 'relance_faite':
+            bons = [b for b in bons if (b.nb_relances_whatsapp or 0) > 0]
+
         if f_statut_rec:
             bons = [b for b in bons if any(l.statut_reception == f_statut_rec for l in b.lignes)]
 
         return render_template('suivi.html',
                                bons=bons,
+                               bons_en_retard_24h=bons_en_retard_24h,
+                               total_retard_24h=len(bons_en_retard_24h),
                                filtres={'vehicule': f_vehicule,
                                         'fournisseur': f_fournisseur,
                                         'transporteur': f_transporteur,
-                                        'statut_reception': f_statut_rec})
+                                        'statut_reception': f_statut_rec,
+                                        'relance': f_relance})
 
     # ─── ADMIN : UTILISATEURS ─────────────────────────────────────────────
     @app.route('/admin/utilisateurs')
@@ -1361,12 +1466,14 @@ def create_app():
                 except Exception:
                     db.session.rollback()
 
-            # Migration automatique des colonnes BDC (fournisseur_whatsapp, code_securise, whatsapp_envoye, date_envoi_whatsapp)
+            # Migration automatique des colonnes BDC
             colonnes_bdc = [
                 ("fournisseur_whatsapp", "VARCHAR(64)"),
                 ("code_securise", "VARCHAR(64)"),
                 ("whatsapp_envoye", "BOOLEAN DEFAULT FALSE"),
                 ("date_envoi_whatsapp", "TIMESTAMP"),
+                ("nb_relances_whatsapp", "INTEGER DEFAULT 0"),
+                ("date_derniere_relance", "TIMESTAMP"),
             ]
             for col_nom, col_type in colonnes_bdc:
                 try:

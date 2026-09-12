@@ -1,6 +1,8 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 *.log
 cloudflared.exe
 .cloudflared/
 instance/
+.venv/
+data/

@@ -200,9 +200,11 @@ class BonDeCommande(db.Model):
     motif_annulation         = db.Column(db.Text, nullable=True)
     annulateur_id            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
-    # Envoi WhatsApp automatique
+    # Envoi WhatsApp & Relances
     whatsapp_envoye          = db.Column(db.Boolean, default=False)
     date_envoi_whatsapp      = db.Column(db.DateTime, nullable=True)
+    nb_relances_whatsapp     = db.Column(db.Integer, default=0, nullable=False)
+    date_derniere_relance    = db.Column(db.DateTime, nullable=True)
 
     # Relations
     lignes     = db.relationship('LigneBDC', backref='bon', lazy=True,
@@ -242,6 +244,42 @@ class BonDeCommande(db.Model):
     @property
     def total_pieces(self):
         return len(self.lignes)
+
+    @property
+    def pieces_en_attente(self):
+        """Liste des lignes de pièces non encore reçues ou partiellement reçues."""
+        return [l for l in self.lignes if l.statut_reception != 'recu' or (l.quantite_recue or 0) < l.quantite]
+
+    @property
+    def total_pieces_en_attente(self):
+        return len(self.pieces_en_attente)
+
+    @property
+    def est_completement_recu(self):
+        return len(self.pieces_en_attente) == 0 and len(self.lignes) > 0
+
+    @property
+    def date_reference_transmission(self):
+        """Date de transmission / validation ou création."""
+        return self.date_validation_dt or self.date_envoi_whatsapp or self.date_creation
+
+    @property
+    def delai_ecoule_heures(self):
+        """Nombre d'heures écoulées depuis la validation/transmission."""
+        ref = self.date_reference_transmission
+        if not ref:
+            return 0
+        diff = datetime.utcnow() - ref
+        return max(0, int(diff.total_seconds() // 3600))
+
+    @property
+    def est_en_retard_24h(self):
+        """Vrai si validé depuis +24h, non clôturé/annulé, et pièces toujours en attente."""
+        if self.statut in ('refusee', 'cloturee', 'annulee'):
+            return False
+        if self.statut not in ('validee', 'livree', 'en_stock', 'recuperee_transporteur'):
+            return False
+        return self.delai_ecoule_heures >= 24 and bool(self.pieces_en_attente)
 
     def ensure_code_securise(self):
         if not self.code_securise:
@@ -317,6 +355,7 @@ class HistoriqueAction(db.Model):
             'annulation':                'Annulation',
             'modification':              'Modification',
             'envoi_whatsapp':            'Envoi WhatsApp Fournisseur',
+            'relance_whatsapp':          'Relance WhatsApp Fournisseur (+24h)',
         }
         return labels.get(self.type_action, self.type_action)
 
@@ -334,6 +373,7 @@ class HistoriqueAction(db.Model):
             'annulation':                'bi-trash-fill text-dark',
             'modification':              'bi-pencil-fill text-warning',
             'envoi_whatsapp':            'bi-whatsapp text-success',
+            'relance_whatsapp':          'bi-arrow-repeat text-warning',
         }
         return icones.get(self.type_action, 'bi-circle-fill text-muted')
 

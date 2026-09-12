@@ -21,6 +21,33 @@
 </div>
 {% endif %}
 
+<!-- ── ALERTES RELANCES FOURNISSEURS (+24H) ───────────────────────────── -->
+{% if alertes_relance_24h %}
+<div class="alert alert-danger border-danger d-flex align-items-start gap-3 mb-4 shadow-xs">
+  <i class="bi bi-clock-history fs-4 text-danger mt-1"></i>
+  <div class="w-100">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <strong><i class="bi bi-whatsapp text-success me-1"></i>{{ alertes_relance_24h|length }} commande(s) validée(s) depuis plus de 24h avec des pièces en attente :</strong>
+      <a href="{{ url_for('suivi', relance='retard_24h') }}" class="btn btn-sm btn-danger fw-semibold">
+        Consulter & Relancer
+      </a>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+      {% for b in alertes_relance_24h %}
+        <a href="{{ url_for('bdc_view', id=b.id) }}" class="badge bg-white text-dark border border-danger p-2 text-decoration-none shadow-xs">
+          <strong class="text-danger">{{ b.numero_affiche }}</strong> — {{ b.fournisseur or 'Fournisseur' }}
+          <span class="badge bg-danger ms-1">{{ b.delai_ecoule_heures }}h</span>
+          <span class="badge bg-warning text-dark ms-1">{{ b.total_pieces_en_attente }} pcs</span>
+          {% if b.nb_relances_whatsapp and b.nb_relances_whatsapp > 0 %}
+          <span class="badge bg-dark ms-1">{{ b.nb_relances_whatsapp }} rappel(s)</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- ── KPI PÉRIODE & SYNTHÈSE ─────────────────────────────────────── -->
 <div class="row g-3 mb-4">
   {% set kpi_list = [

@@ -8,17 +8,22 @@
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body py-3">
     <form method="GET" action="{{ url_for('suivi') }}" class="row g-3 align-items-end">
-      <div class="col-md-3">
-        <label class="form-label small fw-semibold">Véhicule / Immatriculation</label>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Véhicule / Immat.</label>
         <input type="text" name="vehicule" class="form-control form-control-sm"
                placeholder="ex: TG 433" value="{{ filtres.vehicule }}">
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Fournisseur</label>
+        <input type="text" name="fournisseur" class="form-control form-control-sm"
+               placeholder="Fournisseur" value="{{ filtres.fournisseur }}">
+      </div>
+      <div class="col-md-2">
         <label class="form-label small fw-semibold">Transporteur</label>
         <input type="text" name="transporteur" class="form-control form-control-sm"
                placeholder="Nom transporteur" value="{{ filtres.transporteur }}">
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
         <label class="form-label small fw-semibold">Statut réception</label>
         <select name="statut_reception" class="form-select form-select-sm">
           <option value="">Tous</option>
@@ -27,17 +32,90 @@
           <option value="partiel" {% if filtres.statut_reception == 'partiel' %}selected{% endif %}>Partiel</option>
         </select>
       </div>
-      <div class="col-md-3 d-flex gap-2">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Relances / Délais</label>
+        <select name="relance" class="form-select form-select-sm">
+          <option value="">Tous les délais</option>
+          <option value="retard_24h" {% if filtres.relance == 'retard_24h' %}selected{% endif %}>⚠️ Retard > 24h (À relancer)</option>
+          <option value="relance_faite" {% if filtres.relance == 'relance_faite' %}selected{% endif %}>Déjà relancés</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
         <button type="submit" class="btn btn-primary-navy btn-sm flex-grow-1">
           <i class="bi bi-search me-1"></i>Filtrer
         </button>
-        <a href="{{ url_for('suivi') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('suivi') }}" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
           <i class="bi bi-x"></i>
         </a>
       </div>
     </form>
   </div>
 </div>
+
+<!-- ── ALERTES RELANCES FOURNISSEURS (+24H SANS RÉCEPTION COMPLÈTE) ────── -->
+{% if total_retard_24h and total_retard_24h > 0 and filtres.relance != 'retard_24h' %}
+<div class="alert alert-danger border-danger shadow-xs mb-4 p-3">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <div class="fw-bold text-danger d-flex align-items-center fs-6">
+      <i class="bi bi-clock-history fs-5 me-2"></i>
+      {{ total_retard_24h }} bon(s) validé(s) depuis plus de 24h avec des pièces toujours en attente de réception
+    </div>
+    <a href="{{ url_for('suivi', relance='retard_24h') }}" class="btn btn-sm btn-danger fw-semibold">
+      <i class="bi bi-funnel me-1"></i>Voir uniquement ces bons
+    </a>
+  </div>
+  <div class="table-responsive bg-white rounded border">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light small">
+        <tr>
+          <th>Bon N°</th>
+          <th>Fournisseur & WhatsApp</th>
+          <th>Délai écoulé</th>
+          <th>Pièces en attente</th>
+          <th>Historique relances</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in bons_en_retard_24h %}
+        <tr>
+          <td>
+            <a href="{{ url_for('bdc_view', id=b.id) }}" class="fw-bold text-navy text-decoration-none">
+              {{ b.numero_affiche }}
+            </a>
+          </td>
+          <td>
+            <strong>{{ b.fournisseur or 'Fournisseur externe' }}</strong>
+            {% if b.fournisseur_whatsapp %}
+            <div class="small text-success"><i class="bi bi-whatsapp me-1"></i>{{ b.fournisseur_whatsapp }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-danger">{{ b.delai_ecoule_heures }}h</span>
+          </td>
+          <td>
+            <span class="badge bg-warning text-dark">{{ b.total_pieces_en_attente }} pièce(s) manquante(s)</span>
+          </td>
+          <td>
+            {% if b.nb_relances_whatsapp and b.nb_relances_whatsapp > 0 %}
+            <span class="badge bg-dark">{{ b.nb_relances_whatsapp }} relance(s)</span>
+            {% if b.date_derniere_relance %}<span class="text-muted small ms-1">({{ b.date_derniere_relance.strftime('%d/%m %H:%M') }})</span>{% endif %}
+            {% else %}
+            <span class="badge bg-light text-muted border">0 relance</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('bdc_view', id=b.id) }}" class="btn btn-sm btn-warning text-dark fw-semibold">
+              <i class="bi bi-arrow-repeat me-1"></i>Consulter & Relancer
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <!-- ── RÉSULTATS ───────────────────────────────────────────────────────── -->
 {% if bons %}
@@ -53,10 +131,16 @@
       {% if bdc.vehicule_immatriculation %}
       <span class="text-muted small">{{ bdc.vehicule_immatriculation }}</span>
       {% endif %}
+      {% if bdc.est_en_retard_24h %}
+      <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>> 24h ({{ bdc.delai_ecoule_heures }}h)</span>
+      {% endif %}
+      {% if bdc.nb_relances_whatsapp and bdc.nb_relances_whatsapp > 0 %}
+      <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat me-1"></i>{{ bdc.nb_relances_whatsapp }} relance(s)</span>
+      {% endif %}
     </div>
     <div class="text-muted small">
+      <strong>{{ bdc.fournisseur or 'Fournisseur externe' }}</strong> &bull;
       {{ bdc.date_creation.strftime('%d/%m/%Y') }} &bull;
-      {{ bdc.transporteur or 'Transporteur non spécifié' }} &bull;
       <strong>{{ bdc.pieces_recues }}/{{ bdc.total_pieces }}</strong> pièces reçues
     </div>
   </div>
