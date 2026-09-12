@@ -459,7 +459,8 @@ def create_app():
                                msg_wa=msg_wa,
                                peut_valider=peut_valider_dt(current_user),
                                peut_annuler=peut_annuler(current_user, bdc),
-                               peut_gerer_stock=peut_gerer_stock(current_user))
+                               peut_gerer_stock=peut_gerer_stock(current_user),
+                               fournisseurs_carnet=Fournisseur.query.order_by(Fournisseur.nom.asc()).all())
 
     @app.route('/bdc/<int:id>/modifier_whatsapp', methods=['POST'])
     @login_required
@@ -911,6 +912,41 @@ def create_app():
         db.session.commit()
         flash(f'Fournisseur « {nom} » enregistré dans le carnet avec succès.', 'success')
         return redirect(url_for('fournisseurs'))
+
+    @app.route('/fournisseurs/ajouter_ajax', methods=['POST'])
+    @login_required
+    def fournisseur_ajouter_ajax():
+        nom = request.form.get('nom', '').strip()
+        whatsapp = request.form.get('whatsapp', '').strip()
+        if not nom:
+            return jsonify({'success': False, 'message': 'Le nom du fournisseur est obligatoire.'}), 400
+
+        f_existant = Fournisseur.query.filter(func.lower(Fournisseur.nom) == func.lower(nom)).first()
+        if f_existant:
+            if whatsapp:
+                f_existant.whatsapp = whatsapp
+                db.session.commit()
+            return jsonify({
+                'success': True,
+                'id': f_existant.id,
+                'nom': f_existant.nom,
+                'whatsapp': f_existant.whatsapp or ''
+            })
+
+        nouveau_f = Fournisseur(
+            nom=nom,
+            whatsapp=whatsapp,
+            telephone=request.form.get('telephone', '').strip(),
+            contact_nom=request.form.get('contact_nom', '').strip()
+        )
+        db.session.add(nouveau_f)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'id': nouveau_f.id,
+            'nom': nouveau_f.nom,
+            'whatsapp': nouveau_f.whatsapp or ''
+        })
 
     @app.route('/fournisseurs/<int:id>/modifier', methods=['POST'])
     @login_required
