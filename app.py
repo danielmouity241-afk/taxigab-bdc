@@ -1290,6 +1290,10 @@ def create_app():
             try:
                 if not ConfigurationSysteme.get('whatsapp_passerelle'):
                     ConfigurationSysteme.set('whatsapp_passerelle', 'ultramsg', 'Type de passerelle API WhatsApp')
+                if not ConfigurationSysteme.get('whatsapp_instance_id'):
+                    ConfigurationSysteme.set('whatsapp_instance_id', 'instance191342', 'Instance ID UltraMsg')
+                if not ConfigurationSysteme.get('whatsapp_token'):
+                    ConfigurationSysteme.set('whatsapp_token', 'c7t0v4viafqugtxl', 'Token UltraMsg')
                 if not ConfigurationSysteme.get('whatsapp_auto_validation'):
                     ConfigurationSysteme.set('whatsapp_auto_validation', 'true', 'Envoi automatique dès validation DT')
             except Exception:
