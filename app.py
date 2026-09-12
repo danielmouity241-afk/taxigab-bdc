@@ -15,8 +15,9 @@ import io
 
 from config import Config
 from database import (db, User, BonDeCommande, LigneBDC, HistoriqueAction,
-                      Fournisseur, STATUTS_BDC, STATUTS_COULEURS)
+                      Fournisseur, ConfigurationSysteme, STATUTS_BDC, STATUTS_COULEURS)
 from pdf_generator import generate_bdc_pdf
+from whatsapp_service import envoyer_whatsapp_serveur, nettoyer_telephone
 
 # ─────────────────────────────────────────
 # INITIALISATION
@@ -428,6 +429,54 @@ def create_app():
         flash(f'Numéro WhatsApp mis à jour : {num_wa or "Non renseigné"}', 'success')
         return redirect(url_for('bdc_view', id=id))
 
+    # ─── ENVOYER LE BON PAR WHATSAPP DIRECTEMENT DEPUIS LE SERVEUR ────────
+    @app.route('/bdc/<int:id>/envoyer_whatsapp_serveur', methods=['POST'])
+    @login_required
+    def bdc_envoyer_whatsapp_serveur(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+
+        if bdc.statut not in ('validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'):
+            flash('Le bon doit être validé par le DT avant de pouvoir être transmis.', 'warning')
+            return redirect(url_for('bdc_view', id=id))
+
+        if not bdc.fournisseur_whatsapp:
+            flash("Aucun numéro WhatsApp n'est renseigné pour ce fournisseur. Veuillez renseigner le numéro ci-dessous.", 'danger')
+            return redirect(url_for('bdc_view', id=id))
+
+        if not bdc.code_securise:
+            bdc.ensure_code_securise()
+            db.session.commit()
+
+        base_url = request.host_url.rstrip('/')
+        if 'taxigab-bdc.com' in request.host:
+            base_url = 'https://taxigab-bdc.com'
+        lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
+
+        dest_nom = bdc.fournisseur or 'Fournisseur'
+        msg_wa = (
+            f"Bonjour {dest_nom},\n\n"
+            f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+
+        succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+        if succes:
+            bdc.whatsapp_envoye = True
+            bdc.date_envoi_whatsapp = datetime.now()
+            enregistrer_action(bdc, 'envoi_whatsapp',
+                               details=f"Envoyé par le serveur à {bdc.fournisseur_whatsapp} ({detail}) par {current_user.nom_complet}")
+            db.session.commit()
+            flash(f"✅ Bon de commande transmis automatiquement avec succès au fournisseur via WhatsApp !", "success")
+        else:
+            flash(f"⚠️ Information envoi WhatsApp serveur : {detail}", "warning")
+
+        return redirect(url_for('bdc_view', id=id))
+
     # ─── VALIDER (DT) ─────────────────────────────────────────────────────
     @app.route('/bdc/<int:id>/valider', methods=['POST'])
     @login_required
@@ -449,6 +498,32 @@ def create_app():
         enregistrer_action(bdc, 'validation_dt', ancien_statut=ancien, nouveau_statut='validee',
                             details=f"Validé par {current_user.nom_complet}")
         db.session.commit()
+
+        # Envoi automatique par le serveur si l'option est activée
+        auto_wa = ConfigurationSysteme.get('whatsapp_auto_validation', 'false').lower() == 'true'
+        if auto_wa and bdc.fournisseur_whatsapp:
+            base_url = request.host_url.rstrip('/')
+            if 'taxigab-bdc.com' in request.host:
+                base_url = 'https://taxigab-bdc.com'
+            lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
+            dest_nom = bdc.fournisseur or 'Fournisseur'
+            msg_wa = (
+                f"Bonjour {dest_nom},\n\n"
+                f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+                f"validé par la Direction Technique.\n\n"
+                f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
+                f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+                f"Direction Technique TAXI GAB+"
+            )
+            succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+            if succes:
+                bdc.whatsapp_envoye = True
+                bdc.date_envoi_whatsapp = datetime.now()
+                enregistrer_action(bdc, 'envoi_whatsapp', details=f"Automatique après validation DT à {bdc.fournisseur_whatsapp} ({detail})")
+                db.session.commit()
+                flash(f'Bon N°{bdc.numero} validé avec succès et transmis automatiquement au fournisseur sur WhatsApp !', 'success')
+                return redirect(url_for('bdc_view', id=id))
+
         flash(f'Bon N°{bdc.numero} validé avec succès.', 'success')
         return redirect(url_for('bdc_view', id=id))
 
@@ -1122,6 +1197,49 @@ def create_app():
         flash(f"Compte {user.nom_complet} {statut_txt}.", 'info')
         return redirect(url_for('admin_users'))
 
+    # ─── CONFIGURATION PASSERELLE WHATSAPP ────────────────────────────────
+    @app.route('/admin/whatsapp', methods=['GET', 'POST'])
+    @login_required
+    def admin_whatsapp():
+        if not peut_gerer_utilisateurs(current_user):
+            abort(403)
+
+        if request.method == 'POST':
+            action = request.form.get('action')
+            if action == 'tester':
+                tel_test = request.form.get('test_telephone', '').strip()
+                if not tel_test:
+                    flash('Veuillez renseigner un numéro de téléphone pour le test.', 'warning')
+                else:
+                    test_msg = (
+                        "✅ Test de connexion TAXI GAB+\n\n"
+                        "Votre passerelle WhatsApp serveur fonctionne parfaitement ! "
+                        "Les bons de commande validés pourront désormais être expédiés automatiquement."
+                    )
+                    succes, detail = envoyer_whatsapp_serveur(tel_test, test_msg)
+                    if succes:
+                        flash(f"✅ Message test envoyé avec succès à {tel_test} ! ({detail})", "success")
+                    else:
+                        flash(f"❌ Résultat du test WhatsApp : {detail}", "danger")
+            else:
+                ConfigurationSysteme.set('whatsapp_passerelle', request.form.get('whatsapp_passerelle', 'ultramsg').strip())
+                ConfigurationSysteme.set('whatsapp_instance_id', request.form.get('whatsapp_instance_id', '').strip())
+                ConfigurationSysteme.set('whatsapp_token', request.form.get('whatsapp_token', '').strip())
+                ConfigurationSysteme.set('whatsapp_custom_url', request.form.get('whatsapp_custom_url', '').strip())
+                auto_val = 'true' if request.form.get('whatsapp_auto_validation') == 'on' else 'false'
+                ConfigurationSysteme.set('whatsapp_auto_validation', auto_val)
+                flash("Paramètres de la passerelle WhatsApp enregistrés avec succès.", "success")
+                return redirect(url_for('admin_whatsapp'))
+
+        configs = {
+            'passerelle': ConfigurationSysteme.get('whatsapp_passerelle', 'ultramsg'),
+            'instance_id': ConfigurationSysteme.get('whatsapp_instance_id', ''),
+            'token': ConfigurationSysteme.get('whatsapp_token', ''),
+            'custom_url': ConfigurationSysteme.get('whatsapp_custom_url', ''),
+            'auto_validation': ConfigurationSysteme.get('whatsapp_auto_validation', 'true') == 'true',
+        }
+        return render_template('admin/whatsapp_settings.html', configs=configs)
+
     # Initialisation automatique des tables et comptes par défaut au démarrage
     with app.app_context():
         try:
@@ -1154,10 +1272,12 @@ def create_app():
                 except Exception:
                     db.session.rollback()
 
-            # Migration automatique des colonnes BDC (fournisseur_whatsapp et code_securise)
+            # Migration automatique des colonnes BDC (fournisseur_whatsapp, code_securise, whatsapp_envoye, date_envoi_whatsapp)
             colonnes_bdc = [
                 ("fournisseur_whatsapp", "VARCHAR(64)"),
                 ("code_securise", "VARCHAR(64)"),
+                ("whatsapp_envoye", "BOOLEAN DEFAULT FALSE"),
+                ("date_envoi_whatsapp", "TIMESTAMP"),
             ]
             for col_nom, col_type in colonnes_bdc:
                 try:
@@ -1165,6 +1285,15 @@ def create_app():
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
+
+            # Paramètres par défaut de la passerelle WhatsApp
+            try:
+                if not ConfigurationSysteme.get('whatsapp_passerelle'):
+                    ConfigurationSysteme.set('whatsapp_passerelle', 'ultramsg', 'Type de passerelle API WhatsApp')
+                if not ConfigurationSysteme.get('whatsapp_auto_validation'):
+                    ConfigurationSysteme.set('whatsapp_auto_validation', 'true', 'Envoi automatique dès validation DT')
+            except Exception:
+                db.session.rollback()
 
             # Remplir code_securise pour les bons existants qui n'en ont pas
             try:
