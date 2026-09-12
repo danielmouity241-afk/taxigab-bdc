@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Configuration Serveur WhatsApp — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-whatsapp text-success me-2"></i>Passerelle WhatsApp Serveur (Envoi Automatique){% endblock %}
+
+{% block content %}
+<div class="row g-4 justify-content-center">
+  <div class="col-lg-8">
+
+    <!-- ── EXPLICATION DU FONCTIONNEMENT AUTOMATIQUE ──────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4 border-start border-4 border-success">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-start gap-3">
+          <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 text-success rounded-circle p-3 flex-shrink-0">
+            <i class="bi bi-robot fs-2"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-navy mb-1">Envoi WhatsApp 100 % automatique depuis le serveur</h5>
+            <p class="text-muted small mb-2">
+              Grâce à cette passerelle, les bons de commande et les liens PDF officiels sont expédiés 
+              <strong>directement par le serveur en arrière-plan</strong> dès que le Directeur Technique valide le bon, 
+              <strong>sans avoir besoin d'ouvrir WhatsApp Web sur votre ordinateur</strong> et même si tous vos postes sont éteints.
+            </p>
+            <div class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1">
+              <i class="bi bi-shield-check me-1"></i>Fonctionnement autonome 24h/24
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FORMULAIRE DE CONFIGURATION ────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-navy text-white py-3">
+        <h6 class="mb-0 fw-bold">
+          <i class="bi bi-sliders me-2"></i>Paramètres de la Passerelle WhatsApp
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('admin_whatsapp') }}">
+
+          <!-- Choix du Fournisseur API -->
+          <div class="mb-4">
+            <label class="form-label fw-bold">Passerelle WhatsApp active</label>
+            <select name="whatsapp_passerelle" id="select_passerelle" class="form-select form-select-lg" onchange="changerPasserelle(this.value)">
+              <option value="ultramsg" {% if configs.passerelle == 'ultramsg' %}selected{% endif %}>
+                UltraMsg (Recommandé — Configuration en 30 secondes via QR Code)
+              </option>
+              <option value="greenapi" {% if configs.passerelle == 'greenapi' %}selected{% endif %}>
+                Green-API (Instance WhatsApp Cloud)
+              </option>
+              <option value="custom" {% if configs.passerelle == 'custom' %}selected{% endif %}>
+                Webhook HTTP Personnalisé / Serveur Interne
+              </option>
+              <option value="simulation" {% if configs.passerelle == 'simulation' %}selected{% endif %}>
+                Mode Simulation (Tests internes sans envoi réel)
+              </option>
+            </select>
+          </div>
+
+          <!-- Instance ID -->
+          <div class="mb-3" id="group_instance_id">
+            <label class="form-label fw-semibold">
+              <span id="label_instance">ID d'Instance (Instance ID)</span>
+            </label>
+            <input type="text" name="whatsapp_instance_id" class="form-control"
+                   value="{{ configs.instance_id }}" placeholder="ex: instance12345">
+            <div class="form-text text-muted">L'identifiant de votre session sur la passerelle.</div>
+          </div>
+
+          <!-- Token / Clé API -->
+          <div class="mb-3" id="group_token">
+            <label class="form-label fw-semibold">Token d'accès / Clé API</label>
+            <input type="password" name="whatsapp_token" class="form-control"
+                   value="{{ configs.token }}" placeholder="ex: abcd1234efgh5678...">
+            <div class="form-text text-muted">Votre clé secrète de connexion fournie par la passerelle.</div>
+          </div>
+
+          <!-- URL personnalisée (si Webhook custom) -->
+          <div class="mb-3" id="group_custom_url" style="display:none;">
+            <label class="form-label fw-semibold">URL de l'API / Webhook</label>
+            <input type="url" name="whatsapp_custom_url" class="form-control"
+                   value="{{ configs.custom_url }}" placeholder="https://api.votre-serveur.com/whatsapp/send">
+            <div class="form-text text-muted">Point de terminaison HTTP POST pour expédier le message.</div>
+          </div>
+
+          <!-- Option Envoi Automatique lors de la validation DT -->
+          <hr class="my-4">
+          <div class="form-check form-switch p-3 bg-light rounded border mb-4">
+            <input class="form-check-input ms-0 me-3" type="checkbox" role="switch"
+                   id="whatsapp_auto_validation" name="whatsapp_auto_validation"
+                   {% if configs.auto_validation %}checked{% endif %} style="transform: scale(1.3);">
+            <label class="form-check-label fw-bold text-navy" for="whatsapp_auto_validation">
+              Envoi 100 % automatique dès que le DT clique sur « Valider »
+            </label>
+            <div class="small text-muted mt-1 ps-5">
+              Si activé, à la seconde où le Directeur Technique valide le bon de commande, 
+              le serveur envoie immédiatement le message avec le lien du PDF officiel au fournisseur sans action supplémentaire.
+            </div>
+          </div>
+
+          <div class="text-end">
+            <button type="submit" class="btn btn-primary-navy btn-lg fw-bold px-4">
+              <i class="bi bi-check2-circle me-1"></i> Enregistrer les paramètres
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── TEST EN TEMPS RÉEL ────────────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="mb-0 fw-bold text-navy">
+          <i class="bi bi-send-check text-success me-2"></i>Tester la Passerelle WhatsApp
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        <p class="small text-muted mb-3">
+          Entrez votre propre numéro WhatsApp pour vérifier instantanément que votre serveur communique correctement avec la passerelle.
+        </p>
+        <form method="POST" action="{{ url_for('admin_whatsapp') }}" class="row g-3 align-items-end">
+          <input type="hidden" name="action" value="tester">
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Numéro WhatsApp de test :</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+              <input type="tel" name="test_telephone" class="form-control"
+                     placeholder="ex: +241 74 00 00 00 ou 074000000" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <button type="submit" class="btn btn-success fw-bold w-100">
+              <i class="bi bi-whatsapp me-1"></i> Envoyer le test
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── GUIDE RAPIDE : COMMENT LIER VOTRE WHATSAPP ─────────────────────── -->
+    <div class="card border-0 shadow-sm bg-light">
+      <div class="card-body p-4">
+        <h6 class="fw-bold text-navy mb-3"><i class="bi bi-info-circle me-2 text-primary"></i>Guide rapide : Comment connecter votre WhatsApp (UltraMsg)</h6>
+        <ol class="small text-muted mb-0 ps-3">
+          <li class="mb-2">Rendez-vous sur <a href="https://ultramsg.com" target="_blank" class="fw-bold text-primary">ultramsg.com</a> et créez un compte gratuit.</li>
+          <li class="mb-2">Créez une instance puis <strong>scannez le QR Code une seule fois</strong> avec le WhatsApp de TAXI GAB+.</li>
+          <li class="mb-2">Copiez votre <strong>Instance ID</strong> et votre <strong>Token</strong> dans le formulaire ci-dessus.</li>
+          <li>Cliquez sur <strong>Enregistrer les paramètres</strong> : votre serveur est désormais relié 24h/24 pour tous les envois automatiques !</li>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function changerPasserelle(val) {
+  const customUrlGroup = document.getElementById('group_custom_url');
+  const instanceGroup = document.getElementById('group_instance_id');
+  const tokenGroup = document.getElementById('group_token');
+  
+  if (val === 'custom') {
+    customUrlGroup.style.display = 'block';
+    instanceGroup.style.display = 'none';
+  } else if (val === 'simulation') {
+    customUrlGroup.style.display = 'none';
+    instanceGroup.style.display = 'none';
+    tokenGroup.style.display = 'none';
+  } else {
+    customUrlGroup.style.display = 'none';
+    instanceGroup.style.display = 'block';
+    tokenGroup.style.display = 'block';
+  }
+}
+document.addEventListener('DOMContentLoaded', function() {
+  changerPasserelle(document.getElementById('select_passerelle').value);
+});
+</script>
+{% endblock %}
