@@ -51,8 +51,8 @@
                   {% if user.can_creer_bdc %}
                     <span class="badge bg-primary-soft text-primary border" title="Habilité à créer / écrire des bons"><i class="bi bi-pencil-square me-1"></i>Création BDC</span>
                   {% endif %}
-                  {% if user.peut_valider_dt or user.role == 'DT' %}
-                    <span class="badge bg-success-soft text-success border" title="Peut valider ou refuser">Validation DT</span>
+                  {% if user.can_valider_dt %}
+                    <span class="badge bg-success-soft text-success border" title="Habilité par le DT à valider la transmission"><i class="bi bi-shield-check me-1"></i>Validation Transmission DT</span>
                   {% endif %}
                   {% if user.peut_gerer_stock or user.role in ['DT', 'DTA', 'magasinier'] %}
                     <span class="badge bg-warning-soft text-dark border" title="Peut pointer et gérer les réceptions">Stock / Réception</span>
