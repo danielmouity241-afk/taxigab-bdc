@@ -111,15 +111,15 @@
           <!-- 2. Actions opérationnelles -->
           <div id="section-actions-detaillees" class="row g-2 mb-4">
             <div class="col-md-6">
-              <div class="p-3 border rounded h-100 bg-white shadow-xs">
+              <div class="p-3 border rounded h-100 bg-white shadow-xs" style="border-left: 4px solid #2563eb !important;">
                 <div class="form-check form-switch">
                   <input class="form-check-input perm-action" type="checkbox" name="peut_creer_bdc" id="perm-creer"
-                         {% if user and (user.peut_creer_bdc or user.role in ['DT', 'DTA', 'magasinier']) and not user.est_spectateur %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="perm-creer">
-                    <i class="bi bi-plus-circle text-primary me-1"></i> Créer des bons de commande
+                         {% if user and (user.peut_creer_bdc or user.role in ['DT', 'Directeur Technique']) and not user.est_spectateur %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold text-primary" for="perm-creer">
+                    <i class="bi bi-pencil-square me-1"></i> Habilité à écrire / créer des bons de commande
                   </label>
                 </div>
-                <div class="small text-muted mt-1">Accès au formulaire de saisie d'un nouveau BDC.</div>
+                <div class="small text-muted mt-1">Autorisation expresse accordée par le DT pour rédiger un BDC. Sans cette case cochée, l'utilisateur ne peut pas écrire de bon.</div>
               </div>
             </div>
 
