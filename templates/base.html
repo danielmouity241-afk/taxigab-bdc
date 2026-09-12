@@ -108,6 +108,8 @@
           <i class="bi bi-people me-2"></i> Utilisateurs
         </a>
       </li>
+      {% endif %}
+      {% if current_user.is_directeur_technique %}
       <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'admin_whatsapp' %}active{% endif %}"
            href="{{ url_for('admin_whatsapp') }}">
