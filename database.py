@@ -326,6 +326,11 @@ class LigneBDC(db.Model):
         }
         return couleurs.get(self.statut_reception, 'secondary')
 
+    @property
+    def quantite_restante(self):
+        """Nombre d'unités de cette pièce encore en attente de réception."""
+        return max(0, (self.quantite or 1) - (self.quantite_recue or 0))
+
 
 # ─────────────────────────────────────────
 # HISTORIQUE / JOURNAL D'AUDIT

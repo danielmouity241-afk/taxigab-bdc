@@ -459,8 +459,7 @@ def create_app():
         # Message de relance spécifique listant les pièces en attente
         pieces_manquantes_txt = ""
         for p in bdc.pieces_en_attente:
-            qte_restante = p.quantite - (p.quantite_recue or 0)
-            pieces_manquantes_txt += f"• {qte_restante}x {p.designation}\n"
+            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
 
         if not pieces_manquantes_txt.strip():
             pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
@@ -509,16 +508,16 @@ def create_app():
         flash(f'Numéro WhatsApp mis à jour : {num_wa or "Non renseigné"}', 'success')
         return redirect(url_for('bdc_view', id=id))
 
-    # ─── ENVOYER LE BON PAR WHATSAPP DIRECTEMENT DEPUIS LE SERVEUR ────────
-    @app.route('/bdc/<int:id>/envoyer_whatsapp_serveur', methods=['POST'])
+    # ─── ENVOYER LE BON PAR WHATSAPP (DIRECT OU SERVEUR) ───────────────────
+    @app.route('/bdc/<int:id>/envoyer_whatsapp_serveur', methods=['GET', 'POST'])
     @login_required
     def bdc_envoyer_whatsapp_serveur(id):
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
 
-        if not est_directeur_technique(current_user) and not peut_valider_dt(current_user):
-            flash("Accès refusé : seul le Directeur Technique est autorisé à utiliser la passerelle WhatsApp.", 'danger')
+        if getattr(current_user, 'est_spectateur', False):
+            flash("Accès refusé : les comptes spectateurs ne peuvent pas effectuer d'envoi WhatsApp.", 'danger')
             return redirect(url_for('bdc_view', id=id))
 
         if bdc.statut not in ('validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'):
@@ -548,29 +547,47 @@ def create_app():
             f"Direction Technique TAXI GAB+"
         )
 
+        phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
+        if phone_clean:
+            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa)}"
+        else:
+            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
+
+        nom_user = current_user.nom_complet or getattr(current_user, 'username', 'Utilisateur')
+
+        # Mode direct (ouverture directe de WhatsApp sur mobile ou PC)
+        if request.args.get('direct') == '1' or request.form.get('direct') == '1':
+            bdc.whatsapp_envoye = True
+            bdc.date_envoi_whatsapp = datetime.now()
+            enregistrer_action(bdc, 'envoi_whatsapp',
+                               details=f"Bon transmis sur WhatsApp ({bdc.fournisseur_whatsapp}) par {nom_user}")
+            db.session.commit()
+            return redirect(whatsapp_url)
+
+        # Mode serveur (API UltraMsg / GreenAPI / Webhook)
         succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
         if succes:
             bdc.whatsapp_envoye = True
             bdc.date_envoi_whatsapp = datetime.now()
             enregistrer_action(bdc, 'envoi_whatsapp',
-                               details=f"Envoyé par le serveur à {bdc.fournisseur_whatsapp} ({detail}) par {current_user.nom_complet}")
+                               details=f"Envoyé par le serveur à {bdc.fournisseur_whatsapp} ({detail}) par {nom_user}")
             db.session.commit()
             flash(f"✅ Bon de commande transmis automatiquement avec succès au fournisseur via WhatsApp !", "success")
         else:
-            flash(f"⚠️ Information envoi WhatsApp serveur : {detail}", "warning")
+            flash(f"⚠️ Passerelle WhatsApp serveur : {detail}. Vous pouvez utiliser le bouton vert WhatsApp pour envoyer directement.", "warning")
 
         return redirect(url_for('bdc_view', id=id))
 
     # ─── RELANCER LE FOURNISSEUR PAR WHATSAPP (+24H OU MANUEL) ───────────
-    @app.route('/bdc/<int:id>/relancer_whatsapp', methods=['POST'])
+    @app.route('/bdc/<int:id>/relancer_whatsapp', methods=['GET', 'POST'])
     @login_required
     def bdc_relancer_whatsapp(id):
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
 
-        if not est_directeur_technique(current_user) and not peut_valider_dt(current_user) and not current_user.peut_gerer_stock:
-            flash("Accès refusé : vous n'avez pas l'autorisation d'émettre une relance WhatsApp.", 'danger')
+        if getattr(current_user, 'est_spectateur', False):
+            flash("Accès refusé : les comptes spectateurs ne peuvent pas émettre de relance.", 'danger')
             return redirect(url_for('bdc_view', id=id))
 
         if not bdc.fournisseur_whatsapp:
@@ -589,11 +606,10 @@ def create_app():
         dest_nom = bdc.fournisseur or 'Fournisseur'
         pieces_manquantes_txt = ""
         for p in bdc.pieces_en_attente:
-            qte_restante = p.quantite - (p.quantite_recue or 0)
-            pieces_manquantes_txt += f"• {qte_restante}x {p.designation}\n"
+            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
 
         if not pieces_manquantes_txt.strip():
-            pieces_manquantes_txt = "• (Toutes les pièces commandées)\n"
+            pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
 
         msg_relance_wa = (
             f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
@@ -607,19 +623,44 @@ def create_app():
             f"Direction Technique TAXI GAB+"
         )
 
+        phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
+        if phone_clean:
+            whatsapp_relance_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_relance_wa)}"
+        else:
+            whatsapp_relance_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_relance_wa)}"
+
+        nom_user = current_user.nom_complet or getattr(current_user, 'username', 'Utilisateur')
+
+        # Mode direct (ouverture directe WhatsApp pour mobile et desktop)
+        if request.args.get('direct') == '1' or request.form.get('direct') == '1':
+            bdc.nb_relances_whatsapp = (bdc.nb_relances_whatsapp or 0) + 1
+            bdc.date_derniere_relance = datetime.now()
+            if not bdc.whatsapp_envoye:
+                bdc.whatsapp_envoye = True
+                bdc.date_envoi_whatsapp = datetime.now()
+            nb = bdc.nb_relances_whatsapp
+            enregistrer_action(bdc, 'relance_whatsapp',
+                               details=f"Relance N°{nb} ouverte sur WhatsApp ({bdc.fournisseur_whatsapp}) par {nom_user}")
+            db.session.commit()
+            return redirect(whatsapp_relance_url)
+
+        # Mode serveur (via passerelle API UltraMsg / GreenAPI / Webhook)
         succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_relance_wa, pdf_url=lien_public_pdf)
         bdc.nb_relances_whatsapp = (bdc.nb_relances_whatsapp or 0) + 1
         bdc.date_derniere_relance = datetime.now()
+        if not bdc.whatsapp_envoye:
+            bdc.whatsapp_envoye = True
+            bdc.date_envoi_whatsapp = datetime.now()
         nb = bdc.nb_relances_whatsapp
 
         enregistrer_action(bdc, 'relance_whatsapp',
-                           details=f"Relance N°{nb} émise à {bdc.fournisseur_whatsapp} ({detail}) par {current_user.nom_complet}")
+                           details=f"Relance N°{nb} émise à {bdc.fournisseur_whatsapp} ({detail}) par {nom_user}")
         db.session.commit()
 
         if succes:
             flash(f"✅ Relance N°{nb} transmise automatiquement avec succès au fournisseur sur WhatsApp !", "success")
         else:
-            flash(f"ℹ️ Relance N°{nb} enregistrée. Information passerelle : {detail}", "info")
+            flash(f"ℹ️ Relance N°{nb} enregistrée dans le suivi. Passerelle serveur : {detail}. Vous pouvez envoyer directement via le bouton vert WhatsApp.", "info")
 
         return redirect(url_for('bdc_view', id=id))
 
