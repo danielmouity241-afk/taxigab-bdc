@@ -473,13 +473,27 @@
         <div class="card border border-success bg-success bg-opacity-10 p-3 rounded mb-2">
           <div class="d-flex align-items-center justify-content-between mb-2">
             <span class="fw-bold text-success d-flex align-items-center">
-              <i class="bi bi-whatsapp fs-5 me-1 text-success"></i> Bon validé &bull; WhatsApp
+              <i class="bi bi-whatsapp fs-5 me-1 text-success"></i> Notification Fournisseur
             </span>
-            <span class="badge bg-success text-white">Lien PDF direct</span>
+            {% if bdc.whatsapp_envoye %}
+            <span class="badge bg-success text-white"><i class="bi bi-check-all me-1"></i>Déjà expédié</span>
+            {% else %}
+            <span class="badge bg-warning text-dark">Prêt à envoyer</span>
+            {% endif %}
           </div>
+
+          {% if bdc.whatsapp_envoye and bdc.date_envoi_whatsapp %}
+          <div class="alert alert-success border-success py-2 px-3 mb-2 small d-flex align-items-center justify-content-between">
+            <span><i class="bi bi-check-circle-fill me-1 text-success"></i>Transmis au fournisseur</span>
+            <span class="text-muted" style="font-size:0.75rem;">{{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y %H:%M') }}</span>
+          </div>
+          {% else %}
           <p class="small text-dark mb-2">
-            Transmettez le PDF officiel au fournisseur <strong>{{ bdc.fournisseur or 'Fournisseur' }}</strong> en 1 clic :
+            Transmettez automatiquement le bon de commande officiel et son lien PDF au fournisseur 
+            <strong>{{ bdc.fournisseur or 'Fournisseur' }}</strong> directement depuis le serveur :
           </p>
+          {% endif %}
+
           {% if bdc.fournisseur_whatsapp %}
           <div class="small mb-2 text-dark d-flex align-items-center justify-content-between bg-white p-2 rounded border">
             <span><i class="bi bi-telephone text-success me-1"></i><strong>{{ bdc.fournisseur_whatsapp }}</strong></span>
@@ -495,11 +509,22 @@
             </button>
           </div>
           {% endif %}
-          <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-success fw-bold text-white shadow-sm w-100 mb-2">
-            <i class="bi bi-whatsapp me-2"></i> Envoyer le bon sur WhatsApp
+
+          <!-- BOUTON ENVOI AUTOMATIQUE SERVEUR (DIRECT SANS OUVRIR DE NAVIGATEUR) -->
+          <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
+            <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-2"
+                    {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
+              <i class="bi bi-robot me-2"></i> Envoyer directement (Serveur)
+            </button>
+          </form>
+
+          <!-- OPTION SECONDAIRE MANUELLE VIA WHATSAPP WEB -->
+          <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-outline-success btn-sm w-100 mb-2" title="Ouvrir WhatsApp Web si vous préférez l'envoyer depuis votre compte local">
+            <i class="bi bi-whatsapp me-1"></i> Ouvrir sur WhatsApp Web (Optionnel)
           </a>
-          <div class="d-flex justify-content-between align-items-center">
-            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-navy text-decoration-none" title="Tester le lien du fournisseur">
+
+          <div class="d-flex justify-content-between align-items-center pt-1 border-top">
+            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-navy text-decoration-none" title="Aperçu du lien fournisseur">
               <i class="bi bi-box-arrow-up-right me-1"></i>Tester le lien PDF
             </a>
             <button type="button" class="btn btn-link btn-sm text-secondary p-0 text-decoration-none" onclick="navigator.clipboard.writeText('{{ lien_public_pdf }}'); alert('Lien direct du PDF copié dans le presse-papier !');">
@@ -511,7 +536,7 @@
         <div class="alert alert-warning border border-warning-subtle small mb-2 p-2 d-flex gap-2 align-items-start">
           <i class="bi bi-hourglass-split text-warning fs-5 flex-shrink-0"></i>
           <div>
-            <strong>Lien WhatsApp réservé :</strong> Le bon doit d'abord être validé par la Direction Technique avant de pouvoir être transmis au fournisseur.
+            <strong>Envoi WhatsApp automatique réservé :</strong> Le bon sera expédié dès validation par la Direction Technique.
           </div>
         </div>
         {% endif %}
