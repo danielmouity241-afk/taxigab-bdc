@@ -951,6 +951,24 @@ def create_app():
             download_name=f"{bdc.numero_affiche.replace('/', '-')}.pdf"
         )
 
+    # ─── DOSSIER OFFICIEL DE PRÉSENTATION DU SYSTÈME (PDF) ───────────────
+    @app.route('/systeme/presentation-pdf')
+    def systeme_presentation_pdf():
+        """Sert ou génère à la volée le dossier complet de présentation du système TAXI GAB+ BDC."""
+        pdf_dir = os.path.join(Config.STATIC_DIR, 'docs')
+        pdf_path = os.path.join(pdf_dir, 'TAXI_GAB_Presentation_Systeme_BDC.pdf')
+        if not os.path.exists(pdf_path):
+            os.makedirs(pdf_dir, exist_ok=True)
+            from system_presentation_pdf import generate_system_presentation_pdf
+            generate_system_presentation_pdf(pdf_path, Config.LOGO_PATH)
+        return send_file(
+            pdf_path,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name='TAXI_GAB_Presentation_Systeme_BDC.pdf'
+        )
+
+
     # ─── NOUVELLE RUBRIQUE : FOURNISSEURS & HISTORIQUE MENSUEL ───────────
     @app.route('/fournisseurs')
     @login_required
