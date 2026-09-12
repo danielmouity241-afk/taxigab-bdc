@@ -129,10 +129,10 @@
                   <input class="form-check-input perm-action" type="checkbox" name="peut_valider_dt" id="perm-valider"
                          {% if user and (user.peut_valider_dt or user.role == 'DT') and not user.est_spectateur %}checked{% endif %}>
                   <label class="form-check-label fw-semibold" for="perm-valider">
-                    <i class="bi bi-check-circle text-success me-1"></i> Valider les bons (Visa Direction)
+                    <i class="bi bi-shield-check text-success me-1"></i> Valider la transmission des bons (Délégation DT)
                   </label>
                 </div>
-                <div class="small text-muted mt-1">Apposition du visa de validation ou de refus technique.</div>
+                <div class="small text-muted mt-1">Autorisation expresse accordée par le DT pour valider la transmission des bons de commande aux fournisseurs. Sans cette validation, le bon reste obligatoirement en attente.</div>
               </div>
             </div>
 
