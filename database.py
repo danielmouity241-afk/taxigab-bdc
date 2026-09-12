@@ -58,7 +58,10 @@ class User(UserMixin, db.Model):
     def can_creer_bdc(self):
         if not self.actif or self.est_spectateur:
             return False
-        return bool(self.peut_creer_bdc or self.role in ('DT', 'DTA', 'magasinier', 'Directeur Technique', 'Directeur Technique Adjoint', 'Magasinier'))
+        # Seul le DT ou un collaborateur expressément habilité par le DT (peut_creer_bdc=True) peut écrire un BDC
+        if self.role in ('DT', 'Directeur Technique') or self.is_directeur_technique:
+            return True
+        return bool(self.peut_creer_bdc)
 
     @property
     def can_valider_dt(self):
