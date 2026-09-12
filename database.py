@@ -191,6 +191,10 @@ class BonDeCommande(db.Model):
     motif_annulation         = db.Column(db.Text, nullable=True)
     annulateur_id            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    # Envoi WhatsApp automatique
+    whatsapp_envoye          = db.Column(db.Boolean, default=False)
+    date_envoi_whatsapp      = db.Column(db.DateTime, nullable=True)
+
     # Relations
     lignes     = db.relationship('LigneBDC', backref='bon', lazy=True,
                                   cascade='all, delete-orphan', order_by='LigneBDC.ordre')
@@ -303,6 +307,7 @@ class HistoriqueAction(db.Model):
             'cloture':                   'Clôture',
             'annulation':                'Annulation',
             'modification':              'Modification',
+            'envoi_whatsapp':            'Envoi WhatsApp Fournisseur',
         }
         return labels.get(self.type_action, self.type_action)
 
@@ -319,6 +324,7 @@ class HistoriqueAction(db.Model):
             'cloture':                   'bi-lock-fill text-secondary',
             'annulation':                'bi-trash-fill text-dark',
             'modification':              'bi-pencil-fill text-warning',
+            'envoi_whatsapp':            'bi-whatsapp text-success',
         }
         return icones.get(self.type_action, 'bi-circle-fill text-muted')
 
@@ -339,3 +345,36 @@ class Fournisseur(db.Model):
 
     def __repr__(self):
         return f'<Fournisseur {self.nom}>'
+
+
+# ─────────────────────────────────────────
+# CONFIGURATION SYSTÈME & PASSERELLES
+# ─────────────────────────────────────────
+class ConfigurationSysteme(db.Model):
+    __tablename__ = 'configurations_systeme'
+    cle         = db.Column(db.String(64), primary_key=True)
+    valeur      = db.Column(db.Text, nullable=True)
+    description = db.Column(db.String(256), nullable=True)
+
+    @classmethod
+    def get(cls, cle, defaut=None):
+        try:
+            item = cls.query.filter_by(cle=cle).first()
+            return item.valeur if item and item.valeur is not None else defaut
+        except Exception:
+            return defaut
+
+    @classmethod
+    def set(cls, cle, valeur, description=None):
+        item = cls.query.filter_by(cle=cle).first()
+        if not item:
+            item = cls(cle=cle, valeur=valeur, description=description)
+            db.session.add(item)
+        else:
+            item.valeur = valeur
+            if description:
+                item.description = description
+        db.session.commit()
+
+    def __repr__(self):
+        return f'<Config {self.cle}={self.valeur}>'
