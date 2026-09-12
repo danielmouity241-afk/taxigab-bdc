@@ -65,29 +65,62 @@
 
     <!-- Fournisseur & Affectation -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header section-header-navy">
-        <i class="bi bi-shop me-2"></i>Fournisseur & Destination
+      <div class="card-header section-header-navy d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-shop me-2"></i>Fournisseur & Coordonnées</span>
+        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-nouveau-fournisseur-rapide">
+          <i class="bi bi-person-plus-fill me-1"></i> + Nouveau Fournisseur
+        </button>
       </div>
       <div class="card-body">
         <div class="row g-3">
+          <!-- 1. Sélection automatique depuis le carnet -->
+          <div class="col-12">
+            <div class="p-3 bg-light rounded border border-primary-subtle">
+              <label class="form-label fw-bold text-navy d-flex justify-content-between align-items-center mb-2">
+                <span>
+                  <i class="bi bi-person-lines-fill text-success fs-5 me-2"></i>
+                  Sélectionner un Fournisseur enregistré dans le répertoire :
+                </span>
+                <a href="{{ url_for('fournisseurs') }}" target="_blank" class="small text-decoration-none fw-normal text-primary">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>Gérer le répertoire complet
+                </a>
+              </label>
+
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search text-primary"></i></span>
+                <select class="form-select form-select-lg fw-semibold" id="select_fournisseur_carnet" onchange="appliquerFournisseurCarnet(this)">
+                  <option value="">-- Cliquez pour choisir un fournisseur dans la liste --</option>
+                  {% for f in fournisseurs_carnet %}
+                  <option value="{{ f.nom }}" data-wa="{{ f.whatsapp or '' }}" data-tel="{{ f.telephone or '' }}">
+                    🏢 {{ f.nom }} {% if f.whatsapp %}— 📱 WhatsApp : {{ f.whatsapp }}{% elif f.telephone %}— 📞 Tél : {{ f.telephone }}{% else %}— (Numéro non renseigné){% endif %}
+                  </option>
+                  {% endfor %}
+                  <option value="__MANUEL__">✏️ Autre fournisseur (Saisie manuelle libre)</option>
+                </select>
+                <button type="button" class="btn btn-success fw-semibold" data-bs-toggle="modal" data-bs-target="#modal-nouveau-fournisseur-rapide" title="Ajouter un nouveau fournisseur">
+                  <i class="bi bi-plus-circle me-1"></i>Ajouter au carnet
+                </button>
+              </div>
+
+              <!-- Message interactif de confirmation du numéro -->
+              <div id="feedback-fournisseur-charge" class="mt-2" style="display:none;"></div>
+            </div>
+          </div>
+
+          <!-- 2. Champs Fournisseur et WhatsApp (automatiquement remplis) -->
           <div class="col-md-7">
-            <label class="form-label fw-semibold">Fournisseur</label>
-            <input type="text" name="fournisseur" id="input_fournisseur" list="fournisseurs-list" class="form-control"
-                   placeholder="ex: CFAO Motors, Tractafric, Gabon Pièces..." autocomplete="off">
-            <datalist id="fournisseurs-list">
-              {% for f in fournisseurs_carnet %}
-              <option value="{{ f.nom }}" data-wa="{{ f.whatsapp or f.telephone or '' }}">{{ f.nom }}{% if f.telephone or f.whatsapp %} (WhatsApp: {{ f.whatsapp or f.telephone }}){% endif %}</option>
-              {% endfor %}
-            </datalist>
-            <div class="form-text text-muted">Sélectionnez un fournisseur enregistré ou tapez un nouveau nom.</div>
+            <label class="form-label fw-semibold">Nom du Fournisseur <span class="text-danger">*</span></label>
+            <input type="text" name="fournisseur" id="input_fournisseur" class="form-control"
+                   placeholder="Sélectionné automatiquement ou saisie libre" required>
+            <div class="form-text text-muted">Nom de l'entreprise qui recevra la commande.</div>
           </div>
           <div class="col-md-5">
-            <label class="form-label fw-semibold">
-              <i class="bi bi-whatsapp text-success me-1"></i>N° WhatsApp Fournisseur
+            <label class="form-label fw-semibold text-success">
+              <i class="bi bi-whatsapp me-1"></i>N° WhatsApp Fournisseur
             </label>
-            <input type="tel" name="fournisseur_whatsapp" id="input_fournisseur_whatsapp" class="form-control"
+            <input type="tel" name="fournisseur_whatsapp" id="input_fournisseur_whatsapp" class="form-control border-success"
                    placeholder="ex: +241 74 00 00 00">
-            <div class="form-text text-muted">Pour notification directe du bon validé en 1 clic.</div>
+            <div class="form-text text-muted">Rempli automatiquement depuis le carnet (modifiable si besoin).</div>
           </div>
 
           <!-- Section Spécifique Véhicule (masquée si Bon Garage) -->
@@ -329,28 +362,111 @@ function toggleTypeBon(type) {
   }
 }
 
+function appliquerFournisseurCarnet(selectEl) {
+  const nomInput = document.getElementById('input_fournisseur');
+  const waInput = document.getElementById('input_fournisseur_whatsapp');
+  const feedback = document.getElementById('feedback-fournisseur-charge');
+
+  if (!selectEl.value) {
+    if (feedback) feedback.style.display = 'none';
+    return;
+  }
+
+  if (selectEl.value === '__MANUEL__') {
+    nomInput.value = '';
+    waInput.value = '';
+    nomInput.focus();
+    if (feedback) {
+      feedback.className = 'alert alert-info py-2 px-3 small mb-0 mt-2 border border-info-subtle';
+      feedback.innerHTML = '<i class="bi bi-pencil-fill me-1"></i> Saisie libre : tapez le nom et le numéro WhatsApp ci-dessous. Ils seront automatiquement sauvegardés dans le carnet lors de la création.';
+      feedback.style.display = 'block';
+    }
+    return;
+  }
+
+  const selectedOption = selectEl.options[selectEl.selectedIndex];
+  const nom = selectEl.value;
+  const wa = selectedOption.getAttribute('data-wa') || '';
+
+  nomInput.value = nom;
+  waInput.value = wa;
+
+  if (feedback) {
+    if (wa) {
+      feedback.className = 'alert alert-success py-2 px-3 small mb-0 mt-2 border border-success-subtle d-flex align-items-center justify-content-between';
+      feedback.innerHTML = `<span><i class="bi bi-check-circle-fill text-success me-2 fs-6"></i><strong>${nom}</strong> — N° WhatsApp <strong>${wa}</strong> chargé automatiquement !</span> <span class="badge bg-success text-white">Prêt</span>`;
+    } else {
+      feedback.className = 'alert alert-warning py-2 px-3 small mb-0 mt-2 border border-warning-subtle';
+      feedback.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> <strong>${nom}</strong> est sélectionné, mais n'a pas encore de numéro WhatsApp dans le répertoire. Vous pouvez taper son numéro à droite pour l'enregistrer dans le carnet.`;
+    }
+    feedback.style.display = 'block';
+  }
+}
+
+function enregistrerFournisseurRapide(e) {
+  e.preventDefault();
+  const nom = document.getElementById('quick_nom').value.trim();
+  const wa = document.getElementById('quick_wa').value.trim();
+  const contact = document.getElementById('quick_contact').value.trim();
+  const errDiv = document.getElementById('quick_error');
+  const btn = document.getElementById('btn-save-quick-f');
+
+  if (!nom) {
+    errDiv.textContent = "Veuillez saisir le nom de l'entreprise.";
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enregistrement...';
+
+  const formData = new FormData();
+  formData.append('nom', nom);
+  formData.append('whatsapp', wa);
+  formData.append('contact_nom', contact);
+
+  fetch("{{ url_for('fournisseur_ajouter_ajax') }}", {
+    method: 'POST',
+    body: formData
+  })
+  .then(resp => resp.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Enregistrer & Sélectionner';
+    if (data.success) {
+      const select = document.getElementById('select_fournisseur_carnet');
+      const opt = document.createElement('option');
+      opt.value = data.nom;
+      opt.setAttribute('data-wa', data.whatsapp || '');
+      opt.textContent = `🏢 ${data.nom} ${data.whatsapp ? '— 📱 WhatsApp: ' + data.whatsapp : ''}`;
+
+      select.insertBefore(opt, select.lastElementChild);
+      select.value = data.nom;
+      appliquerFournisseurCarnet(select);
+
+      const modalEl = document.getElementById('modal-nouveau-fournisseur-rapide');
+      const modalInst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      modalInst.hide();
+
+      document.getElementById('form-nouveau-fournisseur-rapide').reset();
+      errDiv.style.display = 'none';
+    } else {
+      errDiv.textContent = data.message || "Erreur lors de l'enregistrement.";
+      errDiv.style.display = 'block';
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Enregistrer & Sélectionner';
+    errDiv.textContent = "Erreur de communication avec le serveur.";
+    errDiv.style.display = 'block';
+  });
+}
+
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', function() {
   const isGarage = document.getElementById('type_garage').checked;
   toggleTypeBon(isGarage ? 'garage' : 'vehicule');
-
-  // Auto-remplissage WhatsApp si le fournisseur est sélectionné dans le carnet
-  const fournisseurInput = document.getElementById('input_fournisseur');
-  const waInput = document.getElementById('input_fournisseur_whatsapp');
-  if (fournisseurInput && waInput) {
-    fournisseurInput.addEventListener('input', function() {
-      const val = this.value.trim().toLowerCase();
-      const options = document.querySelectorAll('#fournisseurs-list option');
-      options.forEach(opt => {
-        if (opt.value.trim().toLowerCase() === val) {
-          const wa = opt.getAttribute('data-wa');
-          if (wa) {
-            waInput.value = wa;
-          }
-        }
-      });
-    });
-  }
 
   // Avertissement obligatoire pour la vérification de caution
   const modalCautionEl = document.getElementById('modal-avertissement-caution');
@@ -363,6 +479,46 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+
+<!-- ── MODAL AJOUT RAPIDE FOURNISSEUR DANS LE CARNET ──────────────────── -->
+<div class="modal fade" id="modal-nouveau-fournisseur-rapide" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-navy text-white">
+        <h6 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i>Ajouter un Fournisseur au Répertoire</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="form-nouveau-fournisseur-rapide" onsubmit="enregistrerFournisseurRapide(event)">
+        <div class="modal-body row g-3">
+          <p class="small text-muted mb-1">
+            Enregistrez ce fournisseur dans le carnet d'adresses. Son numéro sera automatiquement conservé et pré-rempli pour tous les prochains bons.
+          </p>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Nom de l'entreprise *</label>
+            <input type="text" id="quick_nom" class="form-control" placeholder="ex: CFAO Motors, Tractafric, Gabon Pièces..." required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold text-success">
+              <i class="bi bi-whatsapp me-1"></i>N° WhatsApp (avec indicatif)
+            </label>
+            <input type="tel" id="quick_wa" class="form-control border-success" placeholder="ex: +241 74 00 00 00" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Contact / Interlocuteur</label>
+            <input type="text" id="quick_contact" class="form-control" placeholder="ex: M. Dupont (Ventes)">
+          </div>
+          <div id="quick_error" class="col-12 small text-danger" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-success btn-sm fw-semibold" id="btn-save-quick-f">
+            <i class="bi bi-check2-circle me-1"></i>Enregistrer & Sélectionner
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- ── MODAL AVERTISSEMENT VÉRIFICATION CAUTION ────────────────────────── -->
 <div class="modal fade" id="modal-avertissement-caution" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
