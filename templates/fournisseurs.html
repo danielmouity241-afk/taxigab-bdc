@@ -4,6 +4,17 @@
 
 {% block content %}
 
+<!-- Bannière d'information Répertoire & WhatsApp -->
+<div class="alert alert-info border border-info-subtle shadow-xs mb-3 d-flex align-items-center justify-content-between p-3">
+  <div>
+    <h6 class="fw-bold mb-1 text-navy"><i class="bi bi-whatsapp text-success me-2"></i>Numéros WhatsApp pré-remplis par défaut</h6>
+    <span class="small text-dark">Tous les numéros enregistrés dans ce répertoire sont <strong>automatiquement chargés</strong> dès que vous choisissez un fournisseur lors de la création d'un bon de commande. Plus besoin de les taper manuellement !</span>
+  </div>
+  <a href="{{ url_for('bdc_create') }}" class="btn btn-sm btn-primary-navy ms-3 flex-shrink-0">
+    <i class="bi bi-plus-circle me-1"></i>Nouveau bon
+  </a>
+</div>
+
 <!-- ── EN-TÊTE & CARNET D'ADRESSES FOURNISSEURS ──────────────────────── -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
