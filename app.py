@@ -104,6 +104,11 @@ def create_app():
             return False
         return bool(getattr(user, 'peut_gerer_utilisateurs', False) or user.role == 'DT')
 
+    def est_directeur_technique(user):
+        if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
+            return False
+        return bool(getattr(user, 'is_directeur_technique', False) or user.role in ('DT', 'Directeur Technique'))
+
     def peut_voir_historique(user):
         if not user or not getattr(user, 'is_authenticated', False):
             return False
@@ -436,6 +441,10 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
+
+        if not est_directeur_technique(current_user) and not peut_valider_dt(current_user):
+            flash("Accès refusé : seul le Directeur Technique est autorisé à utiliser la passerelle WhatsApp.", 'danger')
+            return redirect(url_for('bdc_view', id=id))
 
         if bdc.statut not in ('validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'):
             flash('Le bon doit être validé par le DT avant de pouvoir être transmis.', 'warning')
@@ -1201,8 +1210,9 @@ def create_app():
     @app.route('/admin/whatsapp', methods=['GET', 'POST'])
     @login_required
     def admin_whatsapp():
-        if not peut_gerer_utilisateurs(current_user):
-            abort(403)
+        if not est_directeur_technique(current_user):
+            flash("Accès réservé exclusivement au Directeur Technique.", "danger")
+            return redirect(url_for('dashboard'))
 
         if request.method == 'POST':
             action = request.form.get('action')
