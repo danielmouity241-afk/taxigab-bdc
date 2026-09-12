@@ -67,6 +67,12 @@ class User(UserMixin, db.Model):
         return bool(self.peut_valider_dt or self.role in ('DT', 'Directeur Technique'))
 
     @property
+    def is_directeur_technique(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return self.role in ('DT', 'Directeur Technique') or bool(self.peut_valider_dt and self.peut_gerer_utilisateurs)
+
+    @property
     def can_gerer_stock(self):
         if not self.actif or self.est_spectateur:
             return False
