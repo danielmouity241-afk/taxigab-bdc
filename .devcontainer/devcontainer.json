@@ -1,0 +1,25 @@
+{
+  "name": "TAXI GAB+ BDC Cloud Workspace",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt",
+  "portsAttributes": {
+    "5000": {
+      "label": "Application TAXI GAB+ BDC",
+      "onAutoForward": "openPreview"
+    }
+  }
+}
