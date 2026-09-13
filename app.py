@@ -132,6 +132,16 @@ def create_app():
             'company_name': Config.COMPANY_NAME,
         }
 
+    # ─── CONTRÔLE DE SANTÉ & ANTI-VEILLE CLOUD (KEEP-ALIVE) ───────────────
+    @app.route('/ping')
+    @app.route('/health')
+    def health_check():
+        return jsonify({
+            "status": "healthy",
+            "service": "taxigab-bdc",
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+
     # ─── AUTHENTIFICATION ─────────────────────────────────────────────────
     @app.route('/')
     def index():
