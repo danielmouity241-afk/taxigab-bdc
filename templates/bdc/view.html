@@ -550,21 +550,17 @@
           {% endif %}
 
           {% if not bdc.whatsapp_envoye %}
-            <!-- BOUTON PREMIÈRE TRANSMISSION (WHATSAPP DIRECT) -->
-            <a href="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}?direct=1" target="_blank"
-               class="btn btn-success fw-bold text-white shadow-sm w-100 py-2 mb-2 text-center"
-               {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}>
-              <i class="bi bi-whatsapp me-2"></i> Transmettre le Bon par WhatsApp
-            </a>
-
-            {% if current_user.is_directeur_technique or peut_valider %}
+            <!-- BOUTON PRINCIPAL TRANSMISSION OFFICIELLE (IMAGE DU BON PAR ULTRA MSG) -->
             <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
-              <button type="submit" class="btn btn-outline-secondary btn-sm w-100"
+              <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-3 text-center fs-6 d-flex align-items-center justify-content-center gap-2"
                       {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-                <i class="bi bi-robot me-1"></i> Envoi automatique (Serveur API)
+                <i class="bi bi-whatsapp fs-4"></i>
+                <span>Transmettre l'Image du Bon au Fournisseur</span>
               </button>
             </form>
-            {% endif %}
+            <div class="small text-muted text-center mb-2" style="font-size:0.8rem;">
+              <i class="bi bi-shield-check text-success me-1"></i>Envoie directement l'image officielle et nette du bon sur le WhatsApp du fournisseur via UltraMsg.
+            </div>
 
             <!-- BOUTON DE RELANCE SI PIECES EN ATTENTE -->
             {% if bdc.pieces_en_attente %}
@@ -579,7 +575,19 @@
             </button>
             {% endif %}
           {% else %}
-            <!-- BOUTON DE RELANCE SPÉCIFIQUE AVEC LISTING DES PIÈCES MANQUANTES -->
+            <!-- BADGE SUCCES ET BOUTON DE RENVOI -->
+            <div class="alert alert-success py-2 px-3 mb-2 small text-center fw-semibold">
+              <i class="bi bi-check-circle-fill me-1 text-success"></i>Image transmise le {{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y à %H:%M') if bdc.date_envoi_whatsapp else '' }}
+            </div>
+
+            <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
+              <button type="submit" class="btn btn-outline-success fw-semibold w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                      {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
+                <i class="bi bi-arrow-repeat fs-5"></i>
+                <span>Renvoyer l'Image Officielle au Fournisseur</span>
+              </button>
+            </form>
+
             {% if bdc.pieces_en_attente %}
             <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2"
                     data-bs-toggle="modal" data-bs-target="#modal-relancer-whatsapp"
@@ -595,30 +603,15 @@
               <i class="bi bi-check-circle-fill me-1 text-success"></i>Toutes les pièces de ce bon ont été reçues
             </div>
             {% endif %}
-
-            <!-- BOUTON RÉ-EXPÉDITION COMPLÈTE DU BON INITIAL -->
-            <div class="d-flex gap-1 mb-2">
-              <a href="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}?direct=1" target="_blank"
-                 class="btn btn-outline-success btn-sm flex-grow-1" title="Renvoyer le bon initial par WhatsApp">
-                <i class="bi bi-whatsapp me-1"></i> Renvoyer bon complet
-              </a>
-              {% if current_user.is_directeur_technique or peut_valider %}
-              <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}">
-                <button type="submit" class="btn btn-outline-secondary btn-sm" title="Renvoyer via serveur API">
-                  <i class="bi bi-robot"></i>
-                </button>
-              </form>
-              {% endif %}
-            </div>
           {% endif %}
 
-          <div class="d-flex justify-content-between align-items-center pt-1 border-top">
-            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-navy text-decoration-none" title="Aperçu du lien fournisseur">
-              <i class="bi bi-box-arrow-up-right me-1"></i>Tester le lien PDF
+          <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top">
+            <a href="{{ lien_public_image }}" target="_blank" class="small text-navy text-decoration-none fw-semibold">
+              <i class="bi bi-image me-1 text-primary"></i>Aperçu Image HD
             </a>
-            <button type="button" class="btn btn-link btn-sm text-secondary p-0 text-decoration-none" onclick="navigator.clipboard.writeText('{{ lien_public_pdf }}'); alert('Lien direct du PDF copié dans le presse-papier !');">
-              <i class="bi bi-clipboard me-1"></i>Copier le lien
-            </button>
+            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-muted text-decoration-none">
+              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Format PDF
+            </a>
           </div>
         </div>
         {% elif bdc.statut == 'en_attente' %}
