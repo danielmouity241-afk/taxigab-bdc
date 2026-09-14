@@ -549,38 +549,42 @@
           </div>
           {% endif %}
 
-          {% if not bdc.whatsapp_envoye %}
-            <!-- BOUTON TRANSMISSION OFFICIELLE (IMAGE DU BON PAR WHATSAPP) -->
-            {% if current_user.is_directeur_technique or peut_valider %}
-            <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
-              <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-2 text-center"
-                      {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-                <i class="bi bi-image me-2"></i> Transmettre l'Image du Bon par WhatsApp
-              </button>
-            </form>
-            {% else %}
-            <a href="{{ whatsapp_url }}" target="_blank"
-               class="btn btn-success fw-bold text-white shadow-sm w-100 py-2 mb-2 text-center"
-               {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}>
-              <i class="bi bi-whatsapp me-2"></i> Transmettre le Bon par WhatsApp
+          <!-- ENVOI AUTOMATIQUE SERVEUR (IMAGE DU BON VIA ULTRA MSG) -->
+          <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
+            <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                    {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
+              <i class="bi bi-send-check-fill fs-5"></i>
+              <span>{% if bdc.whatsapp_envoye %}Renvoyer l'Image Officielle au Fournisseur{% else %}Transmettre l'Image du Bon au Fournisseur{% endif %}</span>
+            </button>
+          </form>
+          <div class="form-text text-muted small text-center mb-3">
+            <i class="bi bi-lightning-charge text-warning me-1"></i>Envoi automatique direct depuis le serveur TAXI GAB+ (Passerelle UltraMsg)
+          </div>
+
+          <!-- ENVOI MANUEL : COPIER L'IMAGE DANS LE PRESSE-PAPIER POUR WHATSAPP -->
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <button type="button" id="btn-copier-image" class="btn btn-outline-success btn-sm flex-grow-1"
+                    onclick="copierImageBDC('{{ lien_public_image }}')" title="Copier l'image pour la coller directement dans WhatsApp (Ctrl+V)">
+              <i class="bi bi-clipboard-check me-1"></i> Copier l'image du Bon (Ctrl+V)
+            </button>
+
+            <a href="{{ url_for('bdc_public_image', code_securise=bdc.code_securise) }}" download="BDC-{{ bdc.numero_affiche.replace('/', '-') }}.jpg"
+               class="btn btn-outline-primary btn-sm" title="Télécharger le fichier image JPG">
+              <i class="bi bi-download me-1"></i> Télécharger JPG
             </a>
-            {% endif %}
 
-            <div class="d-flex gap-2 mb-2">
-              <a href="{{ whatsapp_url }}" target="_blank"
-                 class="btn btn-outline-success btn-sm flex-grow-1"
-                 {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}
-                 title="Ouvrir dans WhatsApp Web / Mobile">
-                <i class="bi bi-whatsapp me-1"></i> Ouvrir WhatsApp Web
-              </a>
-              <a href="{{ lien_public_image }}" target="_blank" class="btn btn-outline-primary btn-sm" title="Voir l'image officielle du bon">
-                <i class="bi bi-eye me-1"></i> Aperçu Image
-              </a>
-            </div>
+            <a href="{{ whatsapp_url }}" target="_blank"
+               class="btn btn-outline-secondary btn-sm"
+               {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}
+               title="Ouvrir WhatsApp Web">
+              <i class="bi bi-whatsapp me-1"></i> WhatsApp Web
+            </a>
+          </div>
 
-            <!-- BOUTON DE RELANCE SI PIECES EN ATTENTE -->
-            {% if bdc.pieces_en_attente %}
-            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2"
+          <!-- BOUTON DE RELANCE SI PIÈCES EN ATTENTE -->
+          {% if bdc.pieces_en_attente %}
+          <div class="mt-2 pt-2 border-top">
+            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm w-100 py-2 d-flex align-items-center justify-content-center gap-2"
                     data-bs-toggle="modal" data-bs-target="#modal-relancer-whatsapp"
                     {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
               <i class="bi bi-arrow-repeat fs-5"></i>
@@ -589,54 +593,16 @@
               <span class="badge bg-dark text-white rounded-pill">{{ bdc.nb_relances_whatsapp }}</span>
               {% endif %}
             </button>
-            {% endif %}
-          {% else %}
-            <!-- BOUTON DE RELANCE SPÉCIFIQUE AVEC LISTING DES PIÈCES MANQUANTES -->
-            {% if bdc.pieces_en_attente %}
-            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2"
-                    data-bs-toggle="modal" data-bs-target="#modal-relancer-whatsapp"
-                    {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-              <i class="bi bi-arrow-repeat fs-5"></i>
-              <span>Relancer le Fournisseur (Pièces en attente)</span>
-              {% if bdc.nb_relances_whatsapp and bdc.nb_relances_whatsapp > 0 %}
-              <span class="badge bg-dark text-white rounded-pill">{{ bdc.nb_relances_whatsapp }}</span>
-              {% endif %}
-            </button>
-            {% else %}
-            <div class="alert alert-light border-success text-success py-2 px-3 mb-2 small text-center fw-semibold">
-              <i class="bi bi-check-circle-fill me-1 text-success"></i>Toutes les pièces de ce bon ont été reçues
-            </div>
-            {% endif %}
-
-            <!-- BOUTON RÉ-EXPÉDITION COMPLÈTE DU BON INITIAL -->
-            <div class="d-flex gap-1 mb-2">
-              {% if current_user.is_directeur_technique or peut_valider %}
-              <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="flex-grow-1">
-                <button type="submit" class="btn btn-outline-success btn-sm w-100" title="Renvoyer l'image officielle par WhatsApp">
-                  <i class="bi bi-image me-1"></i> Renvoyer Image du Bon
-                </button>
-              </form>
-              {% endif %}
-              <a href="{{ whatsapp_url }}" target="_blank"
-                 class="btn btn-outline-secondary btn-sm" title="Ouvrir dans WhatsApp Web">
-                <i class="bi bi-whatsapp"></i>
-              </a>
-              <a href="{{ lien_public_image }}" target="_blank" class="btn btn-outline-primary btn-sm" title="Voir l'image du bon">
-                <i class="bi bi-eye"></i>
-              </a>
-            </div>
+          </div>
           {% endif %}
 
-          <div class="d-flex justify-content-between align-items-center pt-2 border-top">
-            <a href="{{ lien_public_image }}" target="_blank" class="small text-navy text-decoration-none fw-semibold" title="Aperçu de l'image haute définition">
-              <i class="bi bi-image me-1 text-primary"></i>Image du Bon (HD)
+          <div class="d-flex justify-content-between align-items-center pt-2 mt-2 border-top">
+            <a href="{{ lien_public_image }}" target="_blank" class="small text-navy text-decoration-none fw-semibold">
+              <i class="bi bi-image me-1 text-primary"></i>Aperçu Image HD
             </a>
-            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-muted text-decoration-none" title="Aperçu du PDF">
+            <a href="{{ lien_public_pdf }}" target="_blank" class="small text-muted text-decoration-none">
               <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Format PDF
             </a>
-            <button type="button" class="btn btn-link btn-sm text-secondary p-0 text-decoration-none" onclick="navigator.clipboard.writeText('{{ lien_public_image }}'); alert('Lien direct de l\'image copié dans le presse-papier !');">
-              <i class="bi bi-clipboard me-1"></i>Copier lien
-            </button>
           </div>
         </div>
         {% elif bdc.statut == 'en_attente' %}
@@ -1065,4 +1031,43 @@
   </div>
 </div>
 
+<script>
+async function copierImageBDC(url) {
+  const btn = document.getElementById('btn-copier-image');
+  const originalHtml = btn ? btn.innerHTML : '';
+  try {
+    if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Copie en cours...';
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const img = new Image();
+    const urlObj = URL.createObjectURL(blob);
+    img.onload = async function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(async function(pngBlob) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': pngBlob })
+          ]);
+          URL.revokeObjectURL(urlObj);
+          if (btn) btn.innerHTML = '✅ Image copiée ! Collez dans WhatsApp (Ctrl+V)';
+          setTimeout(() => {
+            if (btn) btn.innerHTML = originalHtml;
+          }, 4000);
+        } catch(e) {
+          window.open(url, '_blank');
+          if (btn) btn.innerHTML = originalHtml;
+        }
+      }, 'image/png');
+    };
+    img.src = urlObj;
+  } catch (err) {
+    window.open(url, '_blank');
+    if (btn) btn.innerHTML = originalHtml;
+  }
+}
+</script>
 {% endblock %}
