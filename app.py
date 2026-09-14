@@ -123,6 +123,56 @@ def create_app():
             return False
         return bool(getattr(user, 'can_voir_archives', False))
 
+    def get_ligne_tg_whatsapp(bdc):
+        if bdc.vehicule_nom and bdc.vehicule_nom.strip():
+            v = bdc.vehicule_nom.strip()
+            if v.isdigit():
+                v = f"TG{v}"
+            immat = f" ({bdc.vehicule_immatriculation.strip()})" if bdc.vehicule_immatriculation and bdc.vehicule_immatriculation.strip() else ""
+            return f"TG : {v}{immat}"
+        elif getattr(bdc, 'est_garage', False) or getattr(bdc, 'type_bon', None) == 'garage':
+            return "Affectation : GARAGE (Usage interne)"
+        return ""
+
+    def construire_message_whatsapp(bdc, lien_public_pdf):
+        dest_nom = bdc.fournisseur or 'Fournisseur'
+        ligne_tg = get_ligne_tg_whatsapp(bdc)
+        ligne_tg_bloc = f"{ligne_tg}\n\n" if ligne_tg else "\n"
+        return (
+            f"Bonjour {dest_nom},\n"
+            f"{ligne_tg_bloc}"
+            f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+
+    def construire_message_relance_whatsapp(bdc, lien_public_pdf):
+        dest_nom = bdc.fournisseur or 'Fournisseur'
+        ligne_tg = get_ligne_tg_whatsapp(bdc)
+        ligne_tg_bloc = f"{ligne_tg}\n\n" if ligne_tg else "\n"
+
+        pieces_manquantes_txt = ""
+        for p in getattr(bdc, 'pieces_en_attente', []):
+            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
+
+        if not pieces_manquantes_txt.strip():
+            pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
+
+        return (
+            f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
+            f"Bonjour {dest_nom},\n"
+            f"{ligne_tg_bloc}"
+            f"Nous faisons suite au Bon de Commande officiel N° {bdc.numero_affiche} "
+            f"validé par la Direction Technique.\n\n"
+            f"📦 Pièces toujours en attente de livraison au garage :\n"
+            f"{pieces_manquantes_txt}\n"
+            f"📄 Consultez votre bon officiel en ligne :\n{lien_public_pdf}\n\n"
+            f"Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison de ces pièces au garage.\n\n"
+            f"Direction Technique TAXI GAB+"
+        )
+
     @app.context_processor
     def inject_globals():
         return {
@@ -404,15 +454,7 @@ def create_app():
                     if 'taxigab-bdc.com' in request.host:
                         base_url = 'https://taxigab-bdc.com'
                     lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
-                    dest_nom = bdc.fournisseur or 'Fournisseur'
-                    msg_wa = (
-                        f"Bonjour {dest_nom},\n\n"
-                        f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
-                        f"validé par la Direction Technique.\n\n"
-                        f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
-                        f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
-                        f"Direction Technique TAXI GAB+"
-                    )
+                    msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
                     succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
                     if succes:
                         bdc.whatsapp_envoye = True
@@ -451,40 +493,14 @@ def create_app():
             base_url = 'https://taxigab-bdc.com'
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
-        dest_nom = bdc.fournisseur or 'Fournisseur'
-        msg_wa = (
-            f"Bonjour {dest_nom},\n\n"
-            f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
-            f"validé par la Direction Technique.\n\n"
-            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
-            f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
-            f"Direction Technique TAXI GAB+"
-        )
+        msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
         phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
         if phone_clean:
             whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa)}"
         else:
             whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
 
-        # Message de relance spécifique listant les pièces en attente
-        pieces_manquantes_txt = ""
-        for p in bdc.pieces_en_attente:
-            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
-
-        if not pieces_manquantes_txt.strip():
-            pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
-
-        msg_relance_wa = (
-            f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
-            f"Bonjour {dest_nom},\n\n"
-            f"Nous faisons suite au Bon de Commande officiel N° {bdc.numero_affiche} "
-            f"validé par la Direction Technique.\n\n"
-            f"📦 Pièces toujours en attente de livraison au garage :\n"
-            f"{pieces_manquantes_txt}\n"
-            f"📄 Consultez votre bon officiel en ligne :\n{lien_public_pdf}\n\n"
-            f"Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison de ces pièces au garage.\n\n"
-            f"Direction Technique TAXI GAB+"
-        )
+        msg_relance_wa = construire_message_relance_whatsapp(bdc, lien_public_pdf)
         if phone_clean:
             whatsapp_relance_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_relance_wa)}"
         else:
@@ -547,15 +563,7 @@ def create_app():
             base_url = 'https://taxigab-bdc.com'
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
-        dest_nom = bdc.fournisseur or 'Fournisseur'
-        msg_wa = (
-            f"Bonjour {dest_nom},\n\n"
-            f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
-            f"validé par la Direction Technique.\n\n"
-            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
-            f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
-            f"Direction Technique TAXI GAB+"
-        )
+        msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
 
         phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
         if phone_clean:
@@ -613,25 +621,7 @@ def create_app():
             base_url = 'https://taxigab-bdc.com'
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
-        dest_nom = bdc.fournisseur or 'Fournisseur'
-        pieces_manquantes_txt = ""
-        for p in bdc.pieces_en_attente:
-            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
-
-        if not pieces_manquantes_txt.strip():
-            pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
-
-        msg_relance_wa = (
-            f"⚠️ RAPPEL DE COMMANDE — TAXI GAB+\n"
-            f"Bonjour {dest_nom},\n\n"
-            f"Nous faisons suite au Bon de Commande officiel N° {bdc.numero_affiche} "
-            f"validé par la Direction Technique.\n\n"
-            f"📦 Pièces toujours en attente de livraison au garage :\n"
-            f"{pieces_manquantes_txt}\n"
-            f"📄 Consultez votre bon officiel en ligne :\n{lien_public_pdf}\n\n"
-            f"Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison de ces pièces au garage.\n\n"
-            f"Direction Technique TAXI GAB+"
-        )
+        msg_relance_wa = construire_message_relance_whatsapp(bdc, lien_public_pdf)
 
         phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
         if phone_clean:
@@ -703,15 +693,7 @@ def create_app():
             if 'taxigab-bdc.com' in request.host:
                 base_url = 'https://taxigab-bdc.com'
             lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
-            dest_nom = bdc.fournisseur or 'Fournisseur'
-            msg_wa = (
-                f"Bonjour {dest_nom},\n\n"
-                f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
-                f"validé par la Direction Technique.\n\n"
-                f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
-                f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
-                f"Direction Technique TAXI GAB+"
-            )
+            msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
             succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
             if succes:
                 bdc.whatsapp_envoye = True
