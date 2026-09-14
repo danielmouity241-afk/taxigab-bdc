@@ -16,7 +16,7 @@ import io
 from config import Config
 from database import (db, User, BonDeCommande, LigneBDC, HistoriqueAction,
                       Fournisseur, ConfigurationSysteme, STATUTS_BDC, STATUTS_COULEURS)
-from pdf_generator import generate_bdc_pdf
+from pdf_generator import generate_bdc_pdf, generate_bdc_image
 from whatsapp_service import envoyer_whatsapp_serveur, nettoyer_telephone
 
 # ─────────────────────────────────────────
@@ -134,16 +134,25 @@ def create_app():
             return "Affectation : GARAGE (Usage interne)"
         return ""
 
-    def construire_message_whatsapp(bdc, lien_public_pdf):
+    def construire_message_whatsapp(bdc, lien_public=None, avec_lien=False):
         dest_nom = bdc.fournisseur or 'Fournisseur'
         ligne_tg = get_ligne_tg_whatsapp(bdc)
         ligne_tg_bloc = f"{ligne_tg}\n\n" if ligne_tg else "\n"
+        if avec_lien and lien_public:
+            return (
+                f"Bonjour {dest_nom},\n"
+                f"{ligne_tg_bloc}"
+                f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
+                f"validé par la Direction Technique.\n\n"
+                f"📄 Consultez votre bon officiel en ligne :\n{lien_public}\n\n"
+                f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
+                f"Direction Technique TAXI GAB+"
+            )
         return (
             f"Bonjour {dest_nom},\n"
             f"{ligne_tg_bloc}"
             f"Veuillez trouver ci-joint le Bon de Commande officiel TAXI GAB+ N° {bdc.numero_affiche} "
             f"validé par la Direction Technique.\n\n"
-            f"📄 Consultez et téléchargez votre bon directement via ce lien :\n{lien_public_pdf}\n\n"
             f"Merci de bien vouloir préparer les pièces mentionnées.\n\n"
             f"Direction Technique TAXI GAB+"
         )
@@ -453,15 +462,16 @@ def create_app():
                     base_url = request.host_url.rstrip('/')
                     if 'taxigab-bdc.com' in request.host:
                         base_url = 'https://taxigab-bdc.com'
+                    lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
                     lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
-                    msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
-                    succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+                    msg_wa = construire_message_whatsapp(bdc)
+                    succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf, image_url=lien_public_image)
                     if succes:
                         bdc.whatsapp_envoye = True
                         bdc.date_envoi_whatsapp = datetime.now()
-                        enregistrer_action(bdc, 'envoi_whatsapp', details=f"Automatique après validation création DT à {bdc.fournisseur_whatsapp} ({detail})")
+                        enregistrer_action(bdc, 'envoi_whatsapp', details=f"Image automatique après validation création DT à {bdc.fournisseur_whatsapp} ({detail})")
                         db.session.commit()
-                        flash(f'Bon de commande N°{bdc.numero} créé, validé et transmis automatiquement au fournisseur sur WhatsApp !', 'success')
+                        flash(f'Bon de commande N°{bdc.numero} créé, validé et image officielle transmise au fournisseur sur WhatsApp !', 'success')
                         return redirect(url_for('bdc_view', id=bdc.id))
 
                 flash(f'Bon de commande N°{bdc.numero} créé et validé avec succès !', 'success')
@@ -491,14 +501,16 @@ def create_app():
         base_url = request.host_url.rstrip('/')
         if 'taxigab-bdc.com' in request.host:
             base_url = 'https://taxigab-bdc.com'
+        lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
-        msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
+        msg_wa = construire_message_whatsapp(bdc)
+        msg_wa_direct = construire_message_whatsapp(bdc, lien_public_image, avec_lien=True)
         phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
         if phone_clean:
-            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa)}"
+            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa_direct)}"
         else:
-            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
+            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa_direct)}"
 
         msg_relance_wa = construire_message_relance_whatsapp(bdc, lien_public_pdf)
         if phone_clean:
@@ -511,6 +523,7 @@ def create_app():
                                whatsapp_url=whatsapp_url,
                                whatsapp_relance_url=whatsapp_relance_url,
                                lien_public_pdf=lien_public_pdf,
+                               lien_public_image=lien_public_image,
                                msg_wa=msg_wa,
                                msg_relance_wa=msg_relance_wa,
                                peut_valider=peut_valider_dt(current_user),
@@ -561,15 +574,17 @@ def create_app():
         base_url = request.host_url.rstrip('/')
         if 'taxigab-bdc.com' in request.host:
             base_url = 'https://taxigab-bdc.com'
+        lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
-        msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
+        msg_wa = construire_message_whatsapp(bdc)
+        msg_wa_direct = construire_message_whatsapp(bdc, lien_public_image, avec_lien=True)
 
         phone_clean = re.sub(r'[^0-9]', '', bdc.fournisseur_whatsapp or '')
         if phone_clean:
-            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa)}"
+            whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_clean}&text={urllib.parse.quote(msg_wa_direct)}"
         else:
-            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa)}"
+            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg_wa_direct)}"
 
         nom_user = current_user.nom_complet or getattr(current_user, 'username', 'Utilisateur')
 
@@ -578,21 +593,21 @@ def create_app():
             bdc.whatsapp_envoye = True
             bdc.date_envoi_whatsapp = datetime.now()
             enregistrer_action(bdc, 'envoi_whatsapp',
-                               details=f"Bon transmis sur WhatsApp ({bdc.fournisseur_whatsapp}) par {nom_user}")
+                                details=f"Bon transmis sur WhatsApp ({bdc.fournisseur_whatsapp}) par {nom_user}")
             db.session.commit()
             return redirect(whatsapp_url)
 
         # Mode serveur (API UltraMsg / GreenAPI / Webhook)
-        succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+        succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf, image_url=lien_public_image)
         if succes:
             bdc.whatsapp_envoye = True
             bdc.date_envoi_whatsapp = datetime.now()
             enregistrer_action(bdc, 'envoi_whatsapp',
-                               details=f"Envoyé par le serveur à {bdc.fournisseur_whatsapp} ({detail}) par {nom_user}")
+                                details=f"Image du bon envoyée à {bdc.fournisseur_whatsapp} ({detail}) par {nom_user}")
             db.session.commit()
-            flash(f"✅ Bon de commande transmis automatiquement avec succès au fournisseur via WhatsApp !", "success")
+            flash(f"✅ Image officielle du Bon de Commande N°{bdc.numero} transmise avec succès au fournisseur sur WhatsApp !", "success")
         else:
-            flash(f"⚠️ Passerelle WhatsApp serveur : {detail}. Vous pouvez utiliser le bouton vert WhatsApp pour envoyer directement.", "warning")
+            flash(f"⚠️ Passerelle WhatsApp serveur : {detail}. Vous pouvez ouvrir WhatsApp Web pour envoyer manuellement.", "warning")
 
         return redirect(url_for('bdc_view', id=id))
 
@@ -692,15 +707,16 @@ def create_app():
             base_url = request.host_url.rstrip('/')
             if 'taxigab-bdc.com' in request.host:
                 base_url = 'https://taxigab-bdc.com'
+            lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
             lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
-            msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
-            succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+            msg_wa = construire_message_whatsapp(bdc)
+            succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf, image_url=lien_public_image)
             if succes:
                 bdc.whatsapp_envoye = True
                 bdc.date_envoi_whatsapp = datetime.now()
-                enregistrer_action(bdc, 'envoi_whatsapp', details=f"Automatique après validation DT à {bdc.fournisseur_whatsapp} ({detail})")
+                enregistrer_action(bdc, 'envoi_whatsapp', details=f"Image transmise automatiquement après validation DT à {bdc.fournisseur_whatsapp} ({detail})")
                 db.session.commit()
-                flash(f'Transmission du bon N°{bdc.numero} validée avec succès et transmise automatiquement au fournisseur sur WhatsApp !', 'success')
+                flash(f'Transmission du bon N°{bdc.numero} validée avec succès et image officielle transmise au fournisseur sur WhatsApp !', 'success')
                 return redirect(url_for('bdc_view', id=id))
 
         flash(f'Transmission du bon N°{bdc.numero} validée avec succès.', 'success')
@@ -941,6 +957,25 @@ def create_app():
             mimetype='application/pdf',
             as_attachment=False,
             download_name=f"{bdc.numero_affiche.replace('/', '-')}.pdf"
+        )
+
+    # ─── IMAGE PUBLIQUE SÉCURISÉE FOURNISSEUR (ACCÈS DIRECT IMAGE HD) ─────
+    @app.route('/commande/image/<string:code_securise>.jpg')
+    @app.route('/commande/image/<string:code_securise>')
+    def bdc_public_image(code_securise):
+        bdc = BonDeCommande.query.filter_by(code_securise=code_securise).first()
+        if not bdc:
+            abort(404)
+
+        if bdc.statut in ('en_attente', 'refusee', 'annulee'):
+            return render_template('bdc/public_waiting.html', bdc=bdc)
+
+        img_bytes = generate_bdc_image(bdc, Config, avec_reception=False, dpi=160, format='jpeg')
+        return send_file(
+            io.BytesIO(img_bytes),
+            mimetype='image/jpeg',
+            as_attachment=False,
+            download_name=f"{bdc.numero_affiche.replace('/', '-')}.jpg"
         )
 
     # ─── DOSSIER OFFICIEL DE PRÉSENTATION DU SYSTÈME (PDF) ───────────────
