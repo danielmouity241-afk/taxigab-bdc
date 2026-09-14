@@ -555,7 +555,7 @@ def create_app():
         if not bdc:
             abort(404)
 
-        if getattr(current_user, 'est_spectateur', False):
+        if getattr(current_user, 'est_spectateur', False) and current_user.role not in ('PDG', 'DG', 'Président Directeur Général', 'Directeur Général'):
             flash("Accès refusé : les comptes spectateurs ne peuvent pas effectuer d'envoi WhatsApp.", 'danger')
             return redirect(url_for('bdc_view', id=id))
 
