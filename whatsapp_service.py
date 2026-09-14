@@ -40,9 +40,10 @@ def nettoyer_telephone(phone_raw):
     return clean
 
 
-def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_nom=None):
+def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_nom=None, image_url=None):
     """
-    Envoie un message WhatsApp directement depuis le serveur en tâche de fond.
+    Envoie un message WhatsApp ou l'image officielle d'un bon directement depuis le serveur.
+    Si image_url est spécifié, transmet l'image haute définition directement dans le fil WhatsApp du fournisseur.
     Retourne un tuple : (succes: bool, detail: str)
     """
     tel_propre = nettoyer_telephone(destinataire_tel)
@@ -61,44 +62,64 @@ def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_
     try:
         if passerelle == 'ultramsg':
             # UltraMsg API (Recommandé - simple et instantané)
-            url = f"https://api.ultramsg.com/{instance_id}/messages/chat"
-            payload = {
-                'token': token,
-                'to': tel_propre,
-                'body': message_texte,
-            }
+            if image_url:
+                url = f"https://api.ultramsg.com/{instance_id}/messages/image"
+                payload = {
+                    'token': token,
+                    'to': tel_propre,
+                    'image': image_url,
+                    'caption': message_texte or '',
+                }
+            else:
+                url = f"https://api.ultramsg.com/{instance_id}/messages/chat"
+                payload = {
+                    'token': token,
+                    'to': tel_propre,
+                    'body': message_texte,
+                }
             data_encoded = urllib.parse.urlencode(payload).encode('utf-8')
             req = urllib.request.Request(url, data=data_encoded, headers={
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'TaxiGab-BDC/1.0'
             })
-            with urllib.request.urlopen(req, timeout=12) as response:
+            with urllib.request.urlopen(req, timeout=18) as response:
                 res_body = response.read().decode('utf-8')
                 res_json = json.loads(res_body) if res_body else {}
                 if res_json.get('sent') == 'true' or res_json.get('id'):
-                    return True, f"Message transmis avec succès à UltraMsg (ID: {res_json.get('id', 'OK')})"
+                    msg_type = "Image du Bon de Commande transmise" if image_url else "Message transmis"
+                    return True, f"{msg_type} avec succès à UltraMsg (ID: {res_json.get('id', 'OK')})"
                 elif 'error' in res_json:
                     return False, f"Erreur UltraMsg : {res_json.get('error')}"
-                return True, "Message envoyé avec succès."
+                return True, "Transmission envoyée avec succès."
 
         elif passerelle == 'greenapi':
             # Green-API
-            url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{token}"
             chat_id = f"{tel_propre}@c.us"
-            payload = {
-                'chatId': chat_id,
-                'message': message_texte
-            }
+            if image_url:
+                url = f"https://api.green-api.com/waInstance{instance_id}/sendFileByUrl/{token}"
+                payload = {
+                    'chatId': chat_id,
+                    'urlFile': image_url,
+                    'fileName': f"{pdf_nom or 'bon_de_commande'}.jpg",
+                    'caption': message_texte or ''
+                }
+            else:
+                url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{token}"
+                payload = {
+                    'chatId': chat_id,
+                    'message': message_texte
+                }
             data_json = json.dumps(payload).encode('utf-8')
             req = urllib.request.Request(url, data=data_json, headers={
                 'Content-Type': 'application/json',
                 'User-Agent': 'TaxiGab-BDC/1.0'
             })
-            with urllib.request.urlopen(req, timeout=12) as response:
+            with urllib.request.urlopen(req, timeout=18) as response:
                 res_body = response.read().decode('utf-8')
                 res_json = json.loads(res_body) if res_body else {}
                 if 'idMessage' in res_json:
-                    return True, f"Message transmis avec succès à Green-API (ID: {res_json.get('idMessage')})"
+                    msg_type = "Image du Bon" if image_url else "Message"
+                    return True, f"{msg_type} transmis avec succès à Green-API (ID: {res_json.get('idMessage')})"
                 return True, "Message envoyé avec succès via Green-API."
 
         elif passerelle == 'custom':
@@ -110,6 +131,7 @@ def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_
                 'phone': tel_propre,
                 'message': message_texte,
                 'pdf_url': pdf_url,
+                'image_url': image_url,
                 'token': token
             }
             data_json = json.dumps(payload).encode('utf-8')
@@ -117,12 +139,13 @@ def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_
                 'Content-Type': 'application/json',
                 'User-Agent': 'TaxiGab-BDC/1.0'
             })
-            with urllib.request.urlopen(req, timeout=12) as response:
-                return True, "Message transmis au webhook personnalisé avec succès."
+            with urllib.request.urlopen(req, timeout=18) as response:
+                return True, "Image et message transmis au webhook personnalisé avec succès."
 
         elif passerelle == 'simulation':
             # Mode test / simulation interne
-            return True, f"[SIMULATION] Message préparé pour {tel_propre} avec succès (Passerelle en mode simulation)."
+            cible = "Image du Bon" if image_url else "Message"
+            return True, f"[SIMULATION] {cible} préparé pour {tel_propre} avec succès (Passerelle en mode simulation)."
 
         else:
             return False, f"Passerelle '{passerelle}' non reconnue."
