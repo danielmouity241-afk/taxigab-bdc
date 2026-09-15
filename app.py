@@ -450,12 +450,23 @@ def create_app():
             if statut_initial == 'validee':
                 auto_wa = ConfigurationSysteme.get('whatsapp_auto_validation', 'false').lower() == 'true'
                 if auto_wa and bdc.fournisseur_whatsapp:
-                    base_url = request.host_url.rstrip('/')
-                    if 'taxigab-bdc.com' in request.host:
-                        base_url = 'https://taxigab-bdc.com'
+                    base_url = get_public_base_url()
+                    lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
                     lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
                     msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
-                    succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf)
+                    img_bytes = None
+                    try:
+                        img_bytes = generate_bdc_image(bdc, Config, avec_reception=False, dpi=140, format='jpeg')
+                    except Exception as _e_img:
+                        app.logger.warning(f"Image generation error: {_e_img}")
+                    succes, detail = envoyer_whatsapp_serveur(
+                        bdc.fournisseur_whatsapp,
+                        msg_wa,
+                        pdf_url=lien_public_pdf,
+                        pdf_nom=f"BDC_{bdc.numero_affiche.replace('/', '_')}",
+                        image_url=lien_public_image,
+                        image_bytes=img_bytes
+                    )
                     if succes:
                         bdc.whatsapp_envoye = True
                         bdc.date_envoi_whatsapp = datetime.now()
@@ -477,6 +488,27 @@ def create_app():
                                fournisseurs_carnet=fournisseurs_carnet)
 
     # ─── VOIR UN BDC ──────────────────────────────────────────────────────
+
+def get_public_base_url():
+    """
+    Retourne l'URL racine publique propre (HTTPS) pour les liens transmis par WhatsApp.
+    Garantit HTTPS et évite localhost pour les accès externes.
+    """
+    if not request:
+        return 'https://taxigab-bdc.com'
+    host = request.host.lower()
+    if 'taxigab-bdc.com' in host:
+        return 'https://taxigab-bdc.com'
+    if 'onrender.com' in host:
+        return f"https://{request.host}"
+    if host.startswith('127.0.0.1') or host.startswith('localhost'):
+        return 'https://taxigab-bdc.onrender.com'
+    
+    raw = request.host_url.rstrip('/')
+    if raw.startswith('http://') and not ('127.0.0.1' in raw or 'localhost' in raw):
+        raw = 'https://' + raw[7:]
+    return raw
+
     @app.route('/bdc/<int:id>')
     @login_required
     def bdc_view(id):
@@ -488,9 +520,7 @@ def create_app():
             bdc.ensure_code_securise()
             db.session.commit()
 
-        base_url = request.host_url.rstrip('/')
-        if 'taxigab-bdc.com' in request.host:
-            base_url = 'https://taxigab-bdc.com'
+        base_url = get_public_base_url()
         lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
@@ -560,9 +590,7 @@ def create_app():
             bdc.ensure_code_securise()
             db.session.commit()
 
-        base_url = request.host_url.rstrip('/')
-        if 'taxigab-bdc.com' in request.host:
-            base_url = 'https://taxigab-bdc.com'
+        base_url = get_public_base_url()
         lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
         lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
 
@@ -586,12 +614,19 @@ def create_app():
             return redirect(whatsapp_url)
 
         # Mode serveur (UltraMsg) : Envoi direct de l'image officielle HD du bon
+        img_bytes = None
+        try:
+            img_bytes = generate_bdc_image(bdc, Config, avec_reception=False, dpi=140, format='jpeg')
+        except Exception as _e_img:
+            app.logger.warning(f"Image generation error: {_e_img}")
+
         succes, detail = envoyer_whatsapp_serveur(
             bdc.fournisseur_whatsapp,
             msg_wa,
             pdf_url=lien_public_pdf,
             pdf_nom=f"BDC_{bdc.numero_affiche.replace('/', '_')}",
-            image_url=lien_public_image
+            image_url=lien_public_image,
+            image_bytes=img_bytes
         )
         if succes:
             bdc.whatsapp_envoye = True
@@ -698,13 +733,24 @@ def create_app():
         # Envoi automatique par le serveur si l'option est activée
         auto_wa = ConfigurationSysteme.get('whatsapp_auto_validation', 'false').lower() == 'true'
         if auto_wa and bdc.fournisseur_whatsapp:
-            base_url = request.host_url.rstrip('/')
-            if 'taxigab-bdc.com' in request.host:
-                base_url = 'https://taxigab-bdc.com'
+            base_url = get_public_base_url()
             lien_public_image = f"{base_url}{url_for('bdc_public_image', code_securise=bdc.code_securise)}"
             lien_public_pdf = f"{base_url}{url_for('bdc_public_pdf', code_securise=bdc.code_securise)}"
             msg_wa = construire_message_whatsapp(bdc, lien_public_pdf)
-            succes, detail = envoyer_whatsapp_serveur(bdc.fournisseur_whatsapp, msg_wa, pdf_url=lien_public_pdf, image_url=lien_public_image)
+            img_bytes = None
+            try:
+                img_bytes = generate_bdc_image(bdc, Config, avec_reception=False, dpi=140, format='jpeg')
+            except Exception as _e_img:
+                app.logger.warning(f"Image generation error: {_e_img}")
+
+            succes, detail = envoyer_whatsapp_serveur(
+                bdc.fournisseur_whatsapp,
+                msg_wa,
+                pdf_url=lien_public_pdf,
+                pdf_nom=f"BDC_{bdc.numero_affiche.replace('/', '_')}",
+                image_url=lien_public_image,
+                image_bytes=img_bytes
+            )
             if succes:
                 bdc.whatsapp_envoye = True
                 bdc.date_envoi_whatsapp = datetime.now()
@@ -941,9 +987,6 @@ def create_app():
         bdc = BonDeCommande.query.filter_by(code_securise=code_securise).first()
         if not bdc:
             abort(404)
-
-        if bdc.statut in ('en_attente', 'refusee', 'annulee'):
-            return render_template('bdc/public_waiting.html', bdc=bdc)
 
         img_bytes = generate_bdc_image(bdc, Config, avec_reception=False, dpi=160, format='jpeg')
         return send_file(
