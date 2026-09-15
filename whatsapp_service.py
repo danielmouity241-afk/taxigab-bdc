@@ -7,6 +7,7 @@ import json
 import urllib.request
 import urllib.parse
 import urllib.error
+import base64
 from database import ConfigurationSysteme
 
 
@@ -40,7 +41,7 @@ def nettoyer_telephone(phone_raw):
     return clean
 
 
-def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_nom=None, image_url=None):
+def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_nom=None, image_url=None, image_bytes=None):
     """
     Envoie un message WhatsApp ou l'image officielle d'un bon directement depuis le serveur.
     Si image_url est spécifié, transmet l'image haute définition directement dans le fil WhatsApp du fournisseur.
@@ -61,13 +62,20 @@ def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_
 
     try:
         if passerelle == 'ultramsg':
-            # UltraMsg API (Recommandé - simple et instantané)
-            if image_url:
+            # UltraMsg API (Recommandé - transmission directe d'image ou chat)
+            if image_bytes or image_url:
                 url = f"https://api.ultramsg.com/{instance_id}/messages/image"
+                # Si les octets d'image sont fournis, on envoie directement en base64
+                # Cela évite tout problème de scraping URL, de domaine, de SSL ou de localhost !
+                if image_bytes:
+                    img_data = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode('ascii')
+                else:
+                    img_data = image_url
+
                 payload = {
                     'token': token,
                     'to': tel_propre,
-                    'image': image_url,
+                    'image': img_data,
                     'caption': message_texte or '',
                 }
             else:
