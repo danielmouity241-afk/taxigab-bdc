@@ -22,6 +22,26 @@ from whatsapp_service import envoyer_whatsapp_serveur, nettoyer_telephone
 # ─────────────────────────────────────────
 # INITIALISATION
 # ─────────────────────────────────────────
+def get_public_base_url():
+    """
+    Retourne l'URL racine publique propre (HTTPS) pour les liens transmis par WhatsApp.
+    Garantit HTTPS et évite localhost pour les accès externes.
+    """
+    if not request:
+        return 'https://taxigab-bdc.com'
+    host = request.host.lower()
+    if 'taxigab-bdc.com' in host:
+        return 'https://taxigab-bdc.com'
+    if 'onrender.com' in host:
+        return f"https://{request.host}"
+    if host.startswith('127.0.0.1') or host.startswith('localhost'):
+        return 'https://taxigab-bdc.onrender.com'
+    
+    raw = request.host_url.rstrip('/')
+    if raw.startswith('http://') and not ('127.0.0.1' in raw or 'localhost' in raw):
+        raw = 'https://' + raw[7:]
+    return raw
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -489,25 +509,6 @@ def create_app():
 
     # ─── VOIR UN BDC ──────────────────────────────────────────────────────
 
-def get_public_base_url():
-    """
-    Retourne l'URL racine publique propre (HTTPS) pour les liens transmis par WhatsApp.
-    Garantit HTTPS et évite localhost pour les accès externes.
-    """
-    if not request:
-        return 'https://taxigab-bdc.com'
-    host = request.host.lower()
-    if 'taxigab-bdc.com' in host:
-        return 'https://taxigab-bdc.com'
-    if 'onrender.com' in host:
-        return f"https://{request.host}"
-    if host.startswith('127.0.0.1') or host.startswith('localhost'):
-        return 'https://taxigab-bdc.onrender.com'
-    
-    raw = request.host_url.rstrip('/')
-    if raw.startswith('http://') and not ('127.0.0.1' in raw or 'localhost' in raw):
-        raw = 'https://' + raw[7:]
-    return raw
 
     @app.route('/bdc/<int:id>')
     @login_required
