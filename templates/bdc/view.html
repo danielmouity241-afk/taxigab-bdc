@@ -1,5 +1,44 @@
 {% extends "base.html" %}
-{% block title %}BDC N°{{ bdc.numero }} — TAXI GAB+{% endblock %}
+{% block title %}BDC N°{{ bdc.numero }} — TAXI GAB+<script>
+async function copierImageBDC(url) {
+  const btn = document.getElementById('btn-copier-image');
+  const originalHtml = btn ? btn.innerHTML : '';
+  try {
+    if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Copie de l\'image...';
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const img = new Image();
+    const urlObj = URL.createObjectURL(blob);
+    img.onload = async function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(async function(pngBlob) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': pngBlob })
+          ]);
+          URL.revokeObjectURL(urlObj);
+          if (btn) btn.innerHTML = '✅ Image copiée ! Collez dans WhatsApp (Ctrl+V)';
+          setTimeout(() => {
+            if (btn) btn.innerHTML = originalHtml;
+          }, 4000);
+        } catch(e) {
+          window.open(url, '_blank');
+          if (btn) btn.innerHTML = originalHtml;
+        }
+      }, 'image/png');
+    };
+    img.src = urlObj;
+  } catch (err) {
+    window.open(url, '_blank');
+    if (btn) btn.innerHTML = originalHtml;
+  }
+}
+</script>
+{% endblock %}
 {% block page_title %}
   <i class="bi bi-file-text me-2"></i>
   Bon de commande <span class="text-gold fw-bold">N°{{ bdc.numero }}</span>
@@ -550,16 +589,31 @@
           {% endif %}
 
           {% if not bdc.whatsapp_envoye %}
-            <!-- BOUTON PRINCIPAL TRANSMISSION OFFICIELLE (IMAGE DU BON PAR ULTRA MSG) -->
+            <!-- BOUTON 1 : TRANSMISSION DIRECTE WHATSAPP (OUVERTURE INSTANTANÉE TOUJOURS DISPONIBLE) -->
+            <a href="{{ whatsapp_url }}" target="_blank"
+               class="btn btn-success fw-bold text-white shadow-sm w-100 py-3 mb-2 text-center fs-6 d-flex align-items-center justify-content-center gap-2"
+               {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}>
+              <i class="bi bi-whatsapp fs-4"></i>
+              <span>Ouvrir & Transmettre par WhatsApp</span>
+            </a>
+
+            <!-- BOUTON 2 : COPIER L'IMAGE POUR LA COLLER DIRECTEMENT DANS WHATSAPP -->
+            <button type="button" id="btn-copier-image" class="btn btn-outline-success w-100 mb-2 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2"
+                    onclick="copierImageBDC('{{ lien_public_image }}')" title="Copie l'image du bon dans votre presse-papiers pour la coller (Ctrl+V) dans WhatsApp">
+              <i class="bi bi-clipboard-check fs-5"></i>
+              <span>Copier l'image du Bon (Ctrl+V dans WhatsApp)</span>
+            </button>
+
+            <!-- BOUTON 3 : ENVOI AUTOMATIQUE PAR LE SERVEUR (ULTRAMSG) -->
             <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
-              <button type="submit" class="btn btn-success fw-bold text-white shadow-sm w-100 py-3 text-center fs-6 d-flex align-items-center justify-content-center gap-2"
+              <button type="submit" class="btn btn-outline-secondary btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
                       {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-                <i class="bi bi-whatsapp fs-4"></i>
-                <span>Transmettre l'Image du Bon au Fournisseur</span>
+                <i class="bi bi-robot"></i>
+                <span>Envoi automatique Serveur (Passerelle UltraMsg)</span>
               </button>
             </form>
-            <div class="small text-muted text-center mb-2" style="font-size:0.8rem;">
-              <i class="bi bi-shield-check text-success me-1"></i>Envoie directement l'image officielle et nette du bon sur le WhatsApp du fournisseur via UltraMsg.
+            <div class="small text-muted text-center mb-2" style="font-size:0.75rem;">
+              <i class="bi bi-info-circle text-primary me-1"></i>Si la passerelle UltraMsg est en cours de renouvellement, utilisez le bouton vert ci-dessus.
             </div>
 
             <!-- BOUTON DE RELANCE SI PIECES EN ATTENTE -->
@@ -575,16 +629,29 @@
             </button>
             {% endif %}
           {% else %}
-            <!-- BADGE SUCCES ET BOUTON DE RENVOI -->
+            <!-- BADGE SUCCES ET BOUTONS DE RENVOI -->
             <div class="alert alert-success py-2 px-3 mb-2 small text-center fw-semibold">
-              <i class="bi bi-check-circle-fill me-1 text-success"></i>Image transmise le {{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y à %H:%M') if bdc.date_envoi_whatsapp else '' }}
+              <i class="bi bi-check-circle-fill me-1 text-success"></i>Bon transmis le {{ bdc.date_envoi_whatsapp.strftime('%d/%m/%Y à %H:%M') if bdc.date_envoi_whatsapp else '' }}
             </div>
 
+            <a href="{{ whatsapp_url }}" target="_blank"
+               class="btn btn-outline-success fw-semibold w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2"
+               {% if not bdc.fournisseur_whatsapp %}style="pointer-events:none; opacity:0.65;"{% endif %}>
+              <i class="bi bi-whatsapp fs-5"></i>
+              <span>Renvoyer via WhatsApp Web / Mobile</span>
+            </a>
+
+            <button type="button" id="btn-copier-image" class="btn btn-outline-secondary btn-sm w-100 mb-2 d-flex align-items-center justify-content-center gap-2"
+                    onclick="copierImageBDC('{{ lien_public_image }}')">
+              <i class="bi bi-clipboard-check"></i>
+              <span>Copier l'image du Bon (Ctrl+V)</span>
+            </button>
+
             <form method="POST" action="{{ url_for('bdc_envoyer_whatsapp_serveur', id=bdc.id) }}" class="mb-2">
-              <button type="submit" class="btn btn-outline-success fw-semibold w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                      {% if not bdc.fournisseur_whatsapp %}disabled title="Veuillez d'abord renseigner le numéro WhatsApp"{% endif %}>
-                <i class="bi bi-arrow-repeat fs-5"></i>
-                <span>Renvoyer l'Image Officielle au Fournisseur</span>
+              <button type="submit" class="btn btn-outline-secondary btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
+                      {% if not bdc.fournisseur_whatsapp %}disabled{% endif %}>
+                <i class="bi bi-robot"></i>
+                <span>Renvoyer par le Serveur (UltraMsg)</span>
               </button>
             </form>
 
