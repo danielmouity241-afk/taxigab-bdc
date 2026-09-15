@@ -152,7 +152,9 @@ def envoyer_whatsapp_serveur(destinataire_tel, message_texte, pdf_url=None, pdf_
 
     except urllib.error.HTTPError as e:
         err_msg = e.read().decode('utf-8', errors='ignore')
-        return False, f"Erreur HTTP passerelle ({e.code}) : {err_msg[:160]}"
+        if 'non-payment' in err_msg or 'Stopped' in err_msg:
+            return False, "Instance UltraMsg suspendue (abonnement expiré sur ultramsg.com). Veuillez utiliser le bouton vert WhatsApp direct ci-dessus ou renouveler l'abonnement UltraMsg."
+        return False, f"Erreur passerelle ({e.code}) : {err_msg[:160]}"
     except urllib.error.URLError as e:
         return False, f"Erreur de connexion à la passerelle WhatsApp : {e.reason}"
     except Exception as e:
