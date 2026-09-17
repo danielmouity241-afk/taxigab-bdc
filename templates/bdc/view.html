@@ -1,44 +1,5 @@
 {% extends "base.html" %}
-{% block title %}BDC N°{{ bdc.numero }} — TAXI GAB+<script>
-async function copierImageBDC(url) {
-  const btn = document.getElementById('btn-copier-image');
-  const originalHtml = btn ? btn.innerHTML : '';
-  try {
-    if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Copie de l\'image...';
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const img = new Image();
-    const urlObj = URL.createObjectURL(blob);
-    img.onload = async function() {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      canvas.toBlob(async function(pngBlob) {
-        try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': pngBlob })
-          ]);
-          URL.revokeObjectURL(urlObj);
-          if (btn) btn.innerHTML = '✅ Image copiée ! Collez dans WhatsApp (Ctrl+V)';
-          setTimeout(() => {
-            if (btn) btn.innerHTML = originalHtml;
-          }, 4000);
-        } catch(e) {
-          window.open(url, '_blank');
-          if (btn) btn.innerHTML = originalHtml;
-        }
-      }, 'image/png');
-    };
-    img.src = urlObj;
-  } catch (err) {
-    window.open(url, '_blank');
-    if (btn) btn.innerHTML = originalHtml;
-  }
-}
-</script>
-{% endblock %}
+{% block title %}BDC N°{{ bdc.numero }} — TAXI GAB+{% endblock %}
 {% block page_title %}
   <i class="bi bi-file-text me-2"></i>
   Bon de commande <span class="text-gold fw-bold">N°{{ bdc.numero }}</span>
@@ -63,6 +24,11 @@ async function copierImageBDC(url) {
           <div class="text-center">
             {% if bdc.est_garage %}
             <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE — GARAGE</h4>
+            {% if bdc.nb_impressions and bdc.nb_impressions > 1 %}
+            <div class="mt-1"><span class="badge bg-danger fs-6 shadow-sm"><i class="bi bi-exclamation-triangle-fill me-1"></i>DUPLICATA N° {{ bdc.nb_impressions }}</span></div>
+            {% elif bdc.nb_impressions == 1 %}
+            <div class="mt-1"><span class="badge bg-success fs-6 shadow-sm"><i class="bi bi-check-circle-fill me-1"></i>DOCUMENT ORIGINAL</span></div>
+            {% endif %}
             <span class="badge bg-success mt-1"><i class="bi bi-tools me-1"></i>USAGE INTERNE ATELIER</span>
             {% else %}
             <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE</h4>
@@ -481,11 +447,47 @@ async function copierImageBDC(url) {
       </div>
       <div class="card-body d-grid gap-2">
 
+                <!-- STATUT ET TRAÇABILITÉ DES IMPRESSIONS (DÉTECTION DES DOUBLONS) -->
+        {% if not bdc.nb_impressions or bdc.nb_impressions == 0 %}
+        <div class="alert alert-light border py-2 px-3 mb-2 small text-muted d-flex align-items-center gap-2">
+          <i class="bi bi-printer text-secondary fs-5"></i>
+          <div>
+            <strong>Impression :</strong> Non encore imprimé (Document vierge)
+          </div>
+        </div>
+        {% elif bdc.nb_impressions == 1 %}
+        <div class="alert alert-success border-success py-2 px-3 mb-2 small text-success d-flex align-items-center gap-2" style="background-color: #f0fdf4;">
+          <i class="bi bi-printer-fill text-success fs-5"></i>
+          <div>
+            <strong>Imprimé 1 fois (Original)</strong>
+            <div class="text-muted" style="font-size:0.75rem;">
+              Le {{ bdc.date_derniere_impression.strftime('%d/%m/%Y à %H:%M') if bdc.date_derniere_impression else '' }}
+              {% if bdc.dernier_imprimeur %} par {{ bdc.dernier_imprimeur.nom_complet }}{% endif %}
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="alert alert-warning border-warning py-2 px-3 mb-2 small text-dark d-flex align-items-center gap-2 shadow-sm" style="background-color: #fffbeb;">
+          <i class="bi bi-exclamation-triangle-fill text-danger fs-4"></i>
+          <div>
+            <strong class="text-danger">⚠️ Déjà imprimé {{ bdc.nb_impressions }} fois (Duplicata)</strong>
+            <div class="text-muted" style="font-size:0.75rem;">
+              Dernière impression le {{ bdc.date_derniere_impression.strftime('%d/%m/%Y à %H:%M') if bdc.date_derniere_impression else '' }}
+              {% if bdc.dernier_imprimeur %} par {{ bdc.dernier_imprimeur.nom_complet }}{% endif %}.
+              <br><span class="fw-bold text-danger">Attention aux risques de doublons de commande / réception !</span>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
         <!-- Options d'impression PDF -->
         <div class="dropdown d-grid">
           <button class="btn btn-outline-danger dropdown-toggle fw-semibold text-start d-flex align-items-center justify-content-between"
                   type="button" data-bs-toggle="dropdown">
             <span><i class="bi bi-file-pdf me-2 text-danger"></i>Imprimer / PDF</span>
+            <span class="badge {% if not bdc.nb_impressions %}bg-secondary{% elif bdc.nb_impressions == 1 %}bg-success{% else %}bg-warning text-dark border border-warning{% endif %} rounded-pill ms-auto">
+              {{ bdc.nb_impressions or 0 }} impr.
+            </span>
           </button>
           <ul class="dropdown-menu shadow w-100 p-2">
             <li>
@@ -493,7 +495,13 @@ async function copierImageBDC(url) {
                 <i class="bi bi-file-earmark-text text-danger me-2"></i>
                 <div>
                   <strong>Bon de commande standard</strong>
-                  <div class="small text-muted">Format officiel épuré original</div>
+                  <div class="small text-muted">
+                    {% if not bdc.nb_impressions or bdc.nb_impressions == 0 %}
+                      1ère impression (Original)
+                    {% else %}
+                      <span class="text-danger fw-semibold">⚠️ Réimpression Duplicata N° {{ (bdc.nb_impressions or 0) + 1 }}</span>
+                    {% endif %}
+                  </div>
                 </div>
               </a>
             </li>
@@ -1106,5 +1114,46 @@ async function copierImageBDC(url) {
     </div>
   </div>
 </div>
+
+
+<script>
+async function copierImageBDC(url) {
+  const btn = document.getElementById('btn-copier-image');
+  const originalHtml = btn ? btn.innerHTML : '';
+  try {
+    if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Copie de l\'image...';
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const img = new Image();
+    const urlObj = URL.createObjectURL(blob);
+    img.onload = async function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(async function(pngBlob) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': pngBlob })
+          ]);
+          URL.revokeObjectURL(urlObj);
+          if (btn) btn.innerHTML = '✅ Image copiée ! Collez dans WhatsApp (Ctrl+V)';
+          setTimeout(() => {
+            if (btn) btn.innerHTML = originalHtml;
+          }, 4000);
+        } catch(e) {
+          window.open(url, '_blank');
+          if (btn) btn.innerHTML = originalHtml;
+        }
+      }, 'image/png');
+    };
+    img.src = urlObj;
+  } catch (err) {
+    window.open(url, '_blank');
+    if (btn) btn.innerHTML = originalHtml;
+  }
+}
+</script>
 
 {% endblock %}
