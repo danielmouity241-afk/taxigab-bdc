@@ -222,6 +222,11 @@ class BonDeCommande(db.Model):
     nb_relances_whatsapp     = db.Column(db.Integer, default=0, nullable=False)
     date_derniere_relance    = db.Column(db.DateTime, nullable=True)
 
+    # Impressions & Traçabilité des Doublons
+    nb_impressions           = db.Column(db.Integer, default=0, nullable=False)
+    date_derniere_impression = db.Column(db.DateTime, nullable=True)
+    dernier_imprimeur_id     = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     # Relations
     lignes     = db.relationship('LigneBDC', backref='bon', lazy=True,
                                   cascade='all, delete-orphan', order_by='LigneBDC.ordre')
@@ -231,6 +236,7 @@ class BonDeCommande(db.Model):
     receptionniste   = db.relationship('User', foreign_keys=[receptionniste_id])
     magasinier_stock = db.relationship('User', foreign_keys=[magasinier_stock_id])
     annulateur       = db.relationship('User', foreign_keys=[annulateur_id])
+    dernier_imprimeur = db.relationship('User', foreign_keys=[dernier_imprimeur_id])
 
     @property
     def numero_affiche(self):
@@ -377,6 +383,7 @@ class HistoriqueAction(db.Model):
             'modification':              'Modification',
             'envoi_whatsapp':            'Envoi WhatsApp Fournisseur',
             'relance_whatsapp':          'Relance WhatsApp Fournisseur (+24h)',
+            'impression_pdf':            'Impression du Bon (PDF)',
         }
         return labels.get(self.type_action, self.type_action)
 
@@ -395,6 +402,7 @@ class HistoriqueAction(db.Model):
             'modification':              'bi-pencil-fill text-warning',
             'envoi_whatsapp':            'bi-whatsapp text-success',
             'relance_whatsapp':          'bi-arrow-repeat text-warning',
+            'impression_pdf':            'bi-printer-fill text-danger',
         }
         return icones.get(self.type_action, 'bi-circle-fill text-muted')
 
