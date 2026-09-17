@@ -118,6 +118,13 @@
               {% if bdc.est_garage %}
               <div><span class="badge bg-success" style="font-size:0.65rem;">GARAGE</span></div>
               {% endif %}
+              {% if bdc.nb_impressions and bdc.nb_impressions > 0 %}
+                {% if bdc.nb_impressions == 1 %}
+                <div><span class="badge bg-light text-success border border-success" style="font-size:0.65rem;" title="Imprimé 1 fois (Original)"><i class="bi bi-printer me-1"></i>1 impr.</span></div>
+                {% else %}
+                <div><span class="badge bg-warning-subtle text-danger border border-warning" style="font-size:0.65rem;" title="⚠️ Attention : Déjà imprimé {{ bdc.nb_impressions }} fois (Duplicata)"><i class="bi bi-printer-fill me-1"></i>{{ bdc.nb_impressions }} impr. (Duplicata)</span></div>
+                {% endif %}
+              {% endif %}
             </td>
             <td class="text-muted small">
               {{ bdc.date_creation.strftime('%d/%m/%Y') }}<br>
