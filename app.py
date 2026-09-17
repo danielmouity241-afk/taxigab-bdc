@@ -970,6 +970,21 @@ def create_app():
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
+
+        # Incrémenter le compteur officiel d'impressions du bon
+        bdc.nb_impressions = (bdc.nb_impressions or 0) + 1
+        bdc.date_derniere_impression = datetime.now()
+        bdc.dernier_imprimeur_id = current_user.id
+
+        nom_user = current_user.nom_complet or getattr(current_user, 'username', 'Utilisateur')
+        if bdc.nb_impressions == 1:
+            mention = "1ère impression du bon (Original)"
+        else:
+            mention = f"Réimpression du bon (Duplicata N° {bdc.nb_impressions})"
+        
+        enregistrer_action(bdc, 'impression_pdf', details=f"{mention} par {nom_user}")
+        db.session.commit()
+
         avec_reception = request.args.get('avec_reception') == '1'
         pdf_bytes = generate_bdc_pdf(bdc, Config, avec_reception=avec_reception)
         suffixe = "_reception" if avec_reception else ""
@@ -1626,6 +1641,9 @@ def create_app():
                 ("date_envoi_whatsapp", "TIMESTAMP"),
                 ("nb_relances_whatsapp", "INTEGER DEFAULT 0"),
                 ("date_derniere_relance", "TIMESTAMP"),
+                ("nb_impressions", "INTEGER DEFAULT 0"),
+                ("date_derniere_impression", "TIMESTAMP"),
+                ("dernier_imprimeur_id", "INTEGER"),
             ]
             for col_nom, col_type in colonnes_bdc:
                 try:
