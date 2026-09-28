@@ -22,7 +22,16 @@
             <input type="number" name="numero" class="form-control form-control-sm"
                    placeholder="ex: 751" value="{{ filtres.numero }}">
           </div>
-          <div class="col-md-2">
+                    <div class="col-md-2">
+            <label class="form-label small fw-semibold">Type de bon</label>
+            <select name="type_bon" class="form-select form-select-sm">
+              <option value="">Tous les types</option>
+              <option value="vehicule" {% if filtres.type_bon == 'vehicule' %}selected{% endif %}>Véhicule (Transporteur)</option>
+              <option value="garage" {% if filtres.type_bon == 'garage' %}selected{% endif %}>Garage (Interne)</option>
+              <option value="assurance" {% if filtres.type_bon == 'assurance' %}selected{% endif %}>Assurance</option>
+            </select>
+          </div>
+<div class="col-md-2">
             <label class="form-label small fw-semibold">Statut</label>
             <select name="statut" class="form-select form-select-sm">
               <option value="">Tous</option>
@@ -117,6 +126,8 @@
               <a href="{{ url_for('bdc_view', id=bdc.id) }}" class="bdc-numero font-monospace">{{ bdc.numero_affiche }}</a>
               {% if bdc.est_garage %}
               <div><span class="badge bg-success" style="font-size:0.65rem;">GARAGE</span></div>
+              {% elif bdc.est_assurance %}
+              <div><span class="badge" style="background-color:#581c87; color:white; font-size:0.65rem;"><i class="bi bi-shield-check me-1"></i>ASSURANCE</span></div>
               {% endif %}
               {% if bdc.nb_impressions and bdc.nb_impressions > 0 %}
                 {% if bdc.nb_impressions == 1 %}
