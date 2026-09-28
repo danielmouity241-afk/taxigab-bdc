@@ -8,8 +8,11 @@ class Config:
     LOGO_PATH = os.path.join(STATIC_DIR, 'images', 'logo_taxigab.png')
     # Base de données : PostgreSQL en production (Render DATABASE_URL) ou SQLite en local
     raw_db_url = os.environ.get('DATABASE_URL')
-    if raw_db_url and raw_db_url.startswith('postgres://'):
-        raw_db_url = raw_db_url.replace('postgres://', 'postgresql://', 1)
+    if raw_db_url:
+        if raw_db_url.startswith('postgres://'):
+            raw_db_url = raw_db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+        elif raw_db_url.startswith('postgresql://'):
+            raw_db_url = raw_db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
     SQLALCHEMY_DATABASE_URI = raw_db_url or f"sqlite:///{os.path.join(DATA_DIR, 'taxigab_bdc.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     BDC_START_NUMBER = 1  # Démarre au bon de commande 0001

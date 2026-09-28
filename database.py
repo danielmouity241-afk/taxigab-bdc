@@ -261,7 +261,6 @@ class BonDeCommande(db.Model):
             return "Assurance"
         return "Véhicule"
 
-        return "Garage (Interne)" if self.est_garage else "Véhicule"
 
     @property
     def statut_label(self):

@@ -156,12 +156,15 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
     if getattr(bdc, 'est_garage', False):
         titre_doc = "BON DE COMMANDE — GARAGE"
-        theme_color = colors.HexColor('#166534')
+        theme_hex = '#166534'
+        theme_color = colors.HexColor(theme_hex)
     elif getattr(bdc, 'est_assurance', False):
         titre_doc = "BON DE COMMANDE — ASSURANCE"
-        theme_color = colors.HexColor('#581c87')
+        theme_hex = '#581c87'
+        theme_color = colors.HexColor(theme_hex)
     else:
         titre_doc = "BON DE COMMANDE"
+        theme_hex = '#0a2744'
         theme_color = NAVY
 
     if avec_reception:
@@ -177,7 +180,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
             logo_img,
 
-            Paragraph(f"<font color='{theme_color.hexval()}'>{titre_doc}</font>", S['title']),
+            Paragraph(f"<font color='{theme_hex}'>{titre_doc}</font>", S['title']),
 
             ''
 
@@ -189,7 +192,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
             Paragraph(f"<b>{config.COMPANY_NAME}</b>", S['title']),
 
-            Paragraph(f"<font color='{theme_color.hexval()}'>{titre_doc}</font>", S['title']),
+            Paragraph(f"<font color='{theme_hex}'>{titre_doc}</font>", S['title']),
 
             ''
 
