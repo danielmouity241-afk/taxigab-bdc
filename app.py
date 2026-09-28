@@ -102,11 +102,16 @@ def create_app():
         return bool(getattr(user, 'peut_creer_bdc', False))
 
     def peut_annuler(user, bdc=None):
+        """
+        Pouvoir exclusif du Directeur Technique (DT) :
+        Seul le DT a la possibilité d'annuler les bons de commande (y compris ceux déjà validés),
+        afin de pouvoir corriger et invalider toute erreur commise lors de la saisie.
+        """
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
             return False
-        if bdc and getattr(bdc, 'statut', None) in ('cloturee', 'annulee'):
+        if bdc and getattr(bdc, 'statut', None) == 'annulee':
             return False
-        return bool(getattr(user, 'peut_annuler', False) or user.role in ('DT', 'DTA'))
+        return bool(user.role in ('DT', 'Directeur Technique') or getattr(user, 'is_directeur_technique', False))
 
     def peut_gerer_stock(user):
         if not user or not getattr(user, 'is_authenticated', False) or getattr(user, 'est_spectateur', False):
@@ -144,7 +149,14 @@ def create_app():
         return bool(getattr(user, 'can_voir_archives', False))
 
     def get_ligne_tg_whatsapp(bdc):
-        if bdc.vehicule_nom and bdc.vehicule_nom.strip():
+        if getattr(bdc, 'est_assurance', False) or getattr(bdc, 'type_bon', None) == 'assurance':
+            v = bdc.vehicule_nom.strip() if bdc.vehicule_nom else ""
+            if v.isdigit():
+                v = f"TG{v}"
+            immat = f" ({bdc.vehicule_immatriculation.strip()})" if bdc.vehicule_immatriculation and bdc.vehicule_immatriculation.strip() else ""
+            ref = f" | Réf: {bdc.dossier_assurance}" if getattr(bdc, 'dossier_assurance', None) else ""
+            return f"TG : {v}{immat}\nType : BON ASSURANCE{ref}"
+        elif bdc.vehicule_nom and bdc.vehicule_nom.strip():
             v = bdc.vehicule_nom.strip()
             if v.isdigit():
                 v = f"TG{v}"
@@ -293,6 +305,7 @@ def create_app():
     def bdc_list():
         q = BonDeCommande.query
 
+        f_type_bon    = request.args.get('type_bon', '').strip()
         f_statut      = request.args.get('statut', '')
         f_fournisseur = request.args.get('fournisseur', '')
         f_transporteur = request.args.get('transporteur', '')
@@ -303,6 +316,8 @@ def create_app():
         f_date_fin    = request.args.get('date_fin', '')
         f_numero      = request.args.get('numero', '')
 
+        if f_type_bon:
+            q = q.filter_by(type_bon=f_type_bon)
         if f_statut:
             q = q.filter_by(statut=f_statut)
         if f_fournisseur:
@@ -370,10 +385,12 @@ def create_app():
             fournisseur_whatsapp = request.form.get('fournisseur_whatsapp', '').strip()
             observations         = request.form.get('observations_generales', '').strip()
 
+            dossier_assurance = request.form.get('dossier_assurance', '').strip() if type_bon == 'assurance' else ''
             if type_bon == 'garage':
                 vehicule_nom   = 'GARAGE'
                 vehicule_immat = ''
                 transporteur   = ''
+                dossier_assurance = ''
             else:
                 vehicule_nom   = request.form.get('vehicule_nom', '').strip()
                 vehicule_immat = request.form.get('vehicule_immatriculation', '').strip()
@@ -425,6 +442,7 @@ def create_app():
                 numero=get_next_numero(),
                 code_securise=secrets.token_urlsafe(16),
                 type_bon=type_bon,
+                dossier_assurance=dossier_assurance,
                 createur_id=current_user.id,
                 demandeur_nom=demandeur_nom,
                 service_departement=service,
@@ -880,15 +898,18 @@ def create_app():
         if not bdc or not peut_annuler(current_user, bdc):
             abort(403)
         motif = request.form.get('motif', '').strip()
+        if not motif:
+            motif = "Erreur de saisie / Annulé par le Directeur Technique"
         ancien = bdc.statut
         bdc.statut = 'annulee'
         bdc.date_annulation = datetime.now()
         bdc.motif_annulation = motif
         bdc.annulateur_id = current_user.id
+        mention_valide = " (bon préalablement validé)" if ancien == 'validee' else ""
         enregistrer_action(bdc, 'annulation', ancien_statut=ancien, nouveau_statut='annulee',
-                            details=f"Annulé par {current_user.nom_complet}. Motif: {motif}")
+                            details=f"Bon annulé par le DT ({current_user.nom_complet}){mention_valide}. Motif: {motif}")
         db.session.commit()
-        flash(f'Bon N°{bdc.numero} annulé.', 'dark')
+        flash(f'Le bon N°{bdc.numero_affiche} a été annulé avec succès par la Direction Technique.', 'dark')
         return redirect(url_for('bdc_view', id=id))
 
     # ─── MISE À JOUR RÉCEPTION PIÈCE ──────────────────────────────────────
@@ -1644,6 +1665,7 @@ def create_app():
                 ("nb_impressions", "INTEGER DEFAULT 0"),
                 ("date_derniere_impression", "TIMESTAMP"),
                 ("dernier_imprimeur_id", "INTEGER"),
+                ("dossier_assurance", "VARCHAR(128)"),
             ]
             for col_nom, col_type in colonnes_bdc:
                 try:
