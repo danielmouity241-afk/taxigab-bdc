@@ -100,9 +100,10 @@ class User(UserMixin, db.Model):
     def can_annuler(self, bdc=None):
         if not self.actif or self.est_spectateur:
             return False
-        if bdc and getattr(bdc, 'statut', None) in ('cloturee', 'annulee'):
+        if bdc and getattr(bdc, 'statut', None) == 'annulee':
             return False
-        return bool(self.peut_annuler or self.role in ('DT', 'DTA', 'Directeur Technique', 'Directeur Technique Adjoint'))
+        # Pouvoir exclusif du Directeur Technique (DT) d'annuler les bons (y compris déjà validés)
+        return bool(self.role in ('DT', 'Directeur Technique') or self.is_directeur_technique)
 
     @property
     def can_cloturer(self):
@@ -171,6 +172,7 @@ class BonDeCommande(db.Model):
 
     # Type de bon : 'vehicule' ou 'garage'
     type_bon                 = db.Column(db.String(32), default='vehicule', nullable=False)
+    dossier_assurance        = db.Column(db.String(128), nullable=True)  # Réf / Nom assurance (si type_bon == 'assurance')
 
     # Demandeur
     createur_id              = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -248,7 +250,17 @@ class BonDeCommande(db.Model):
         return self.type_bon == 'garage'
 
     @property
+    def est_assurance(self):
+        return self.type_bon == 'assurance'
+
+    @property
     def type_label(self):
+        if self.est_garage:
+            return "Garage (Interne)"
+        elif self.est_assurance:
+            return "Assurance"
+        return "Véhicule"
+
         return "Garage (Interne)" if self.est_garage else "Véhicule"
 
     @property
