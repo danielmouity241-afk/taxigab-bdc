@@ -22,14 +22,10 @@
                  onerror="this.style.display='none'">
           </div>
           <div class="text-center">
-            {% if bdc.est_garage %}
-            <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE — GARAGE</h4>
-            {% if bdc.nb_impressions and bdc.nb_impressions > 1 %}
-            <div class="mt-1"><span class="badge bg-danger fs-6 shadow-sm"><i class="bi bi-exclamation-triangle-fill me-1"></i>DUPLICATA N° {{ bdc.nb_impressions }}</span></div>
-            {% elif bdc.nb_impressions == 1 %}
-            <div class="mt-1"><span class="badge bg-success fs-6 shadow-sm"><i class="bi bi-check-circle-fill me-1"></i>DOCUMENT ORIGINAL</span></div>
-            {% endif %}
-            <span class="badge bg-success mt-1"><i class="bi bi-tools me-1"></i>USAGE INTERNE ATELIER</span>
+                        {% if bdc.est_garage %}
+            <h4 class="fw-bold text-success mb-0">BON DE COMMANDE — GARAGE</h4>
+            {% elif bdc.est_assurance %}
+            <h4 class="fw-bold mb-0" style="color:#581c87;">BON DE COMMANDE — ASSURANCE</h4>
             {% else %}
             <h4 class="fw-bold text-navy mb-0">BON DE COMMANDE</h4>
             {% endif %}
@@ -762,10 +758,13 @@
         {% endif %}
 
         <!-- 6. ANNULATION -->
-        {% if peut_annuler and bdc.statut not in ['cloturee', 'annulee'] %}
-        <button type="button" class="btn btn-dark btn-sm"
+                {% if peut_annuler and bdc.statut != 'annulee' %}
+        <button type="button" class="btn btn-outline-dark fw-semibold text-start d-flex align-items-center justify-content-between"
                 data-bs-toggle="modal" data-bs-target="#modal-annuler">
-          <i class="bi bi-trash me-2"></i>Annuler le bon
+          <span><i class="bi bi-x-circle me-2 text-danger"></i>Annuler le bon</span>
+          {% if bdc.statut == 'validee' %}
+          <span class="badge bg-warning text-dark border border-warning" style="font-size:0.7rem;">Déjà validé</span>
+          {% endif %}
         </button>
         {% endif %}
 
