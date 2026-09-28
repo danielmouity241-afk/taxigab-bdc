@@ -35,6 +35,8 @@ import io
 NAVY   = colors.HexColor('#0a2744')
 
 GOLD   = colors.HexColor('#c5a028')
+PURPLE = colors.HexColor('#581c87')  # Pourpre Royal Assurance
+GREEN_DARK = colors.HexColor('#166534') # Vert Atelier Garage
 
 LIGHT  = colors.HexColor('#f5f5f5')
 
@@ -152,10 +154,17 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
 
 
-    titre_doc = "BON DE COMMANDE — GARAGE" if getattr(bdc, 'est_garage', False) else "BON DE COMMANDE"
+    if getattr(bdc, 'est_garage', False):
+        titre_doc = "BON DE COMMANDE — GARAGE"
+        theme_color = colors.HexColor('#166534')
+    elif getattr(bdc, 'est_assurance', False):
+        titre_doc = "BON DE COMMANDE — ASSURANCE"
+        theme_color = colors.HexColor('#581c87')
+    else:
+        titre_doc = "BON DE COMMANDE"
+        theme_color = NAVY
 
     if avec_reception:
-
         titre_doc += " (ÉTAT RÉCEPTION)"
 
 
@@ -168,7 +177,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
             logo_img,
 
-            Paragraph(titre_doc, S['title']),
+            Paragraph(f"<font color='{theme_color.hexval()}'>{titre_doc}</font>", S['title']),
 
             ''
 
@@ -180,7 +189,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
             Paragraph(f"<b>{config.COMPANY_NAME}</b>", S['title']),
 
-            Paragraph(titre_doc, S['title']),
+            Paragraph(f"<font color='{theme_color.hexval()}'>{titre_doc}</font>", S['title']),
 
             ''
 
@@ -193,10 +202,17 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
     # Numéro officiel mensuel (ex: BDC-09/26-00001), date et statut d'impression
     num_str = bdc.numero_affiche if hasattr(bdc, 'numero_affiche') else f"{bdc.numero:05d}"
     nb_imp = getattr(bdc, 'nb_impressions', 0) or 0
-    if nb_imp > 1:
-        statut_imp_html = f"<b>STATUT DOCUMENT :</b> <font color='#dc2626'><b>DUPLICATA N° {nb_imp}</b></font> &nbsp;<font color='#555555' size='7.5'>(Document réédité — Déjà imprimé {nb_imp} fois)</font>"
+    if getattr(bdc, 'est_assurance', False):
+        type_badge_html = "<b>CATÉGORIE :</b> <font color='#581c87'><b>BON ASSURANCE</b></font>"
+    elif getattr(bdc, 'est_garage', False):
+        type_badge_html = "<b>CATÉGORIE :</b> <font color='#166534'><b>GARAGE (INTERNE)</b></font>"
     else:
-        statut_imp_html = "<b>STATUT DOCUMENT :</b> <font color='#15803d'><b>ORIGINAL (1ère impression)</b></font>"
+        type_badge_html = "<b>CATÉGORIE :</b> <font color='#0a2744'><b>VÉHICULE (TRANSPORTEUR)</b></font>"
+
+    if nb_imp > 1:
+        statut_imp_html = f"{type_badge_html} &nbsp;&nbsp;|&nbsp;&nbsp; <b>STATUT :</b> <font color='#dc2626'><b>DUPLICATA N° {nb_imp}</b></font> <font color='#555555' size='7'>(Déjà imprimé {nb_imp} fois)</font>"
+    else:
+        statut_imp_html = f"{type_badge_html} &nbsp;&nbsp;|&nbsp;&nbsp; <b>STATUT :</b> <font color='#15803d'><b>ORIGINAL (1ère impression)</b></font>"
 
     numero_date_data = [
         [Paragraph(f"<b>N° BON :</b> {num_str}", S['label']),
@@ -250,7 +266,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
     section_header.setStyle(TableStyle([
 
-        ('BACKGROUND', (0,0), (-1,-1), NAVY),
+        ('BACKGROUND', (0,0), (-1,-1), theme_color),
 
         ('TOPPADDING', (0,0), (-1,-1), 5),
 
@@ -265,53 +281,45 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
 
     if getattr(bdc, 'est_garage', False):
-
         demandeur_data = [
-
             [Paragraph("<b>Demandeur :</b>", S['label']),
-
              Paragraph(bdc.demandeur_nom or '—', S['value']),
-
              Paragraph("<b>Service / Département :</b>", S['label']),
-
              Paragraph(bdc.service_departement or '—', S['value'])],
-
             [Paragraph("<b>Type de bon :</b>", S['label']),
-
-             Paragraph("Usage interne atelier garage", S['value']),
-
+             Paragraph("<font color='#166534'><b>Usage interne atelier garage</b></font>", S['value']),
              '', ''],
-
         ]
-
-    else:
-
+    elif getattr(bdc, 'est_assurance', False):
+        dossier_ref = bdc.dossier_assurance or 'Dossier Sinistre / Prise en charge Assurance'
         demandeur_data = [
-
             [Paragraph("<b>Demandeur :</b>", S['label']),
-
              Paragraph(bdc.demandeur_nom or '—', S['value']),
-
-             Paragraph("<b>Département :</b>", S['label']),
-
+             Paragraph("<b>Service / Dép. :</b>", S['label']),
              Paragraph(bdc.service_departement or '—', S['value'])],
-
             [Paragraph("<b>Véhicule :</b>", S['label']),
-
              Paragraph(bdc.vehicule_nom or '—', S['value']),
-
              Paragraph("<b>Immatriculation :</b>", S['label']),
-
              Paragraph(bdc.vehicule_immatriculation or '—', S['value'])],
-
             [Paragraph("<b>Transporteur :</b>", S['label']),
-
              Paragraph(bdc.transporteur or '—', S['value']),
-
-             '', ''],
-
+             Paragraph("<b>Dossier Assurance :</b>", S['label']),
+             Paragraph(f"<font color='#581c87'><b>{dossier_ref}</b></font>", S['value'])],
         ]
-
+    else:
+        demandeur_data = [
+            [Paragraph("<b>Demandeur :</b>", S['label']),
+             Paragraph(bdc.demandeur_nom or '—', S['value']),
+             Paragraph("<b>Département :</b>", S['label']),
+             Paragraph(bdc.service_departement or '—', S['value'])],
+            [Paragraph("<b>Véhicule :</b>", S['label']),
+             Paragraph(bdc.vehicule_nom or '—', S['value']),
+             Paragraph("<b>Immatriculation :</b>", S['label']),
+             Paragraph(bdc.vehicule_immatriculation or '—', S['value'])],
+            [Paragraph("<b>Transporteur :</b>", S['label']),
+             Paragraph(bdc.transporteur or '—', S['value']),
+             '', ''],
+        ]
     demandeur_table = Table(demandeur_data, colWidths=[3.5*cm, page_width*0.35, 3.5*cm, page_width*0.25])
 
     demandeur_table.setStyle(TableStyle([
@@ -350,7 +358,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
     section_header2.setStyle(TableStyle([
 
-        ('BACKGROUND', (0,0), (-1,-1), NAVY),
+        ('BACKGROUND', (0,0), (-1,-1), theme_color),
 
         ('TOPPADDING', (0,0), (-1,-1), 5),
 
@@ -522,7 +530,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
     section_header3.setStyle(TableStyle([
 
-        ('BACKGROUND', (0,0), (-1,-1), NAVY),
+        ('BACKGROUND', (0,0), (-1,-1), theme_color),
 
         ('TOPPADDING', (0,0), (-1,-1), 5),
 
