@@ -16,26 +16,40 @@
       </div>
       <div class="card-body p-3">
         <div class="row g-3">
-          <div class="col-md-6">
-            <label class="card p-3 border h-100 cursor-pointer type-bon-card active" id="card-type-vehicule" style="cursor:pointer;">
-              <div class="d-flex align-items-center gap-3">
+          <div class="col-md-4">
+            <label class="card p-3 border h-100 cursor-pointer type-bon-card active border-primary bg-light" id="card-type-vehicule" style="cursor:pointer;">
+              <div class="d-flex align-items-center gap-2">
                 <input class="form-check-input mt-0 fs-5" type="radio" name="type_bon" id="type_vehicule" value="vehicule" checked onchange="toggleTypeBon('vehicule')">
                 <div>
-                  <strong class="d-block text-navy fs-6"><i class="bi bi-car-front-fill me-1 text-primary"></i> Bon Véhicule</strong>
-                  <span class="small text-muted">Pour un taxi ou véhicule spécifique (TG / Chauffeur).</span>
+                  <strong class="d-block text-navy"><i class="bi bi-car-front-fill me-1 text-primary"></i> Bon Véhicule</strong>
+                  <span class="small text-muted" style="font-size:0.75rem;">Taxi standard (TG / Transporteur).</span>
                 </div>
               </div>
             </label>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="card p-3 border h-100 cursor-pointer type-bon-card" id="card-type-garage" style="cursor:pointer;">
-              <div class="d-flex align-items-center gap-3">
+              <div class="d-flex align-items-center gap-2">
                 <input class="form-check-input mt-0 fs-5" type="radio" name="type_bon" id="type_garage" value="garage" onchange="toggleTypeBon('garage')">
                 <div>
-                  <strong class="d-block text-navy fs-6"><i class="bi bi-tools me-1 text-success"></i> Bon Garage (Interne)</strong>
-                  <span class="small text-muted">Outillage, consommables, stock interne du garage.</span>
+                  <strong class="d-block text-success"><i class="bi bi-tools me-1 text-success"></i> Bon Garage</strong>
+                  <span class="small text-muted" style="font-size:0.75rem;">Usage interne atelier & stock.</span>
                 </div>
               </div>
+            </label>
+          </div>
+          <div class="col-md-4">
+            <label class="card p-3 border h-100 cursor-pointer type-bon-card" id="card-type-assurance" style="cursor:pointer;">
+              <div class="d-flex align-items-center gap-2">
+                <input class="form-check-input mt-0 fs-5" type="radio" name="type_bon" id="type_assurance" value="assurance" onchange="toggleTypeBon('assurance')">
+                <div>
+                  <strong class="d-block" style="color:#581c87;"><i class="bi bi-shield-check me-1"></i> Bon Assurance</strong>
+                  <span class="small text-muted" style="font-size:0.75rem;">Sinistres & prises en charge.</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
             </label>
           </div>
         </div>
@@ -145,10 +159,22 @@
                   <input type="text" name="vehicule_immatriculation" id="input_immat" class="form-control"
                          placeholder="ex: LH-819-AA">
                 </div>
-                <div class="col-md-4">
+                                <div class="col-md-4">
                   <label class="form-label fw-semibold">Transporteur / Chauffeur</label>
                   <input type="text" name="transporteur" id="input_transporteur" class="form-control"
                          placeholder="Nom du chauffeur ou transporteur">
+                </div>
+                <div class="col-12" id="champ-dossier-assurance" style="display:none;">
+                  <div class="p-3 rounded border shadow-sm" style="background-color: #faf5ff; border-color: #d8b4fe !important;">
+                    <label class="form-label fw-bold mb-1" style="color:#581c87 !important;">
+                      <i class="bi bi-shield-check me-1"></i> Dossier Assurance / N° Sinistre / Compagnie (Optionnel)
+                    </label>
+                    <input type="text" name="dossier_assurance" id="input_dossier_assurance" class="form-control"
+                           placeholder="ex: SAHAM ASSURANCE - Sinistre N° SIN-2026/089">
+                    <div class="form-text text-muted" style="font-size:0.78rem;">
+                      <i class="bi bi-info-circle text-primary me-1"></i>Ce bon sera imprimé avec son code couleur pourpre exclusif et la mention officielle <strong>BON DE COMMANDE — ASSURANCE</strong>.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -342,23 +368,45 @@ function renuméroter() {
 function toggleTypeBon(type) {
   const sectionVehicule = document.getElementById('section-vehicule');
   const sectionGarageInfo = document.getElementById('section-garage-info');
+  const champAssurance = document.getElementById('champ-dossier-assurance');
   const cardVehicule = document.getElementById('card-type-vehicule');
   const cardGarage = document.getElementById('card-type-garage');
+  const cardAssurance = document.getElementById('card-type-assurance');
+
+  // Reset classes
+  if (cardVehicule) cardVehicule.classList.remove('border-primary', 'bg-light');
+  if (cardGarage) cardGarage.classList.remove('border-success', 'bg-light');
+  if (cardAssurance) {
+    cardAssurance.classList.remove('bg-light');
+    cardAssurance.style.borderColor = '#dee2e6';
+    cardAssurance.style.backgroundColor = '';
+  }
 
   if (type === 'garage') {
     sectionVehicule.style.display = 'none';
     sectionGarageInfo.style.display = 'block';
-    cardGarage.classList.add('border-success', 'bg-light');
-    cardVehicule.classList.remove('border-primary', 'bg-light');
-    // Vider les champs véhicule pour le bon garage
+    if (champAssurance) champAssurance.style.display = 'none';
+    if (cardGarage) cardGarage.classList.add('border-success', 'bg-light');
     document.getElementById('input_vehicule_nom').value = '';
     document.getElementById('input_immat').value = '';
     document.getElementById('input_transporteur').value = '';
+    const inpAss = document.getElementById('input_dossier_assurance');
+    if (inpAss) inpAss.value = '';
+  } else if (type === 'assurance') {
+    sectionVehicule.style.display = 'block';
+    sectionGarageInfo.style.display = 'none';
+    if (champAssurance) champAssurance.style.display = 'block';
+    if (cardAssurance) {
+      cardAssurance.style.borderColor = '#581c87';
+      cardAssurance.style.backgroundColor = '#faf5ff';
+    }
   } else {
     sectionVehicule.style.display = 'block';
     sectionGarageInfo.style.display = 'none';
-    cardVehicule.classList.add('border-primary', 'bg-light');
-    cardGarage.classList.remove('border-success', 'bg-light');
+    if (champAssurance) champAssurance.style.display = 'none';
+    if (cardVehicule) cardVehicule.classList.add('border-primary', 'bg-light');
+    const inpAss = document.getElementById('input_dossier_assurance');
+    if (inpAss) inpAss.value = '';
   }
 }
 
