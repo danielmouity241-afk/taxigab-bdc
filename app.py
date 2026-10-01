@@ -64,15 +64,11 @@ def create_app():
     def get_next_numero():
         """Retourne le prochain numéro de BDC réinitialisé à 1 chaque début de mois."""
         now = datetime.utcnow()
-        # Chercher le plus grand numéro créé dans le mois et l'année en cours
-        dernier_du_mois = BonDeCommande.query.filter(
+        max_num = db.session.query(func.max(BonDeCommande.numero)).filter(
             extract('year', BonDeCommande.date_creation) == now.year,
             extract('month', BonDeCommande.date_creation) == now.month
-        ).order_by(BonDeCommande.numero.desc()).first()
-
-        if dernier_du_mois:
-            return dernier_du_mois.numero + 1
-        return 1  # Repart à 00001 chaque nouveau mois
+        ).scalar()
+        return (max_num or 0) + 1
 
     def enregistrer_action(bdc, type_action, ancien_statut=None,
                             nouveau_statut=None, details=None, user=None):
@@ -458,31 +454,41 @@ def create_app():
                 bdc.validateur_dt_id = current_user.id
                 bdc.date_validation_dt = datetime.now()
 
-            db.session.add(bdc)
-            db.session.flush()
+            try:
+                db.session.add(bdc)
+                db.session.flush()
 
-            for i, (desig, qte, obs_l) in enumerate(lignes_valides, 1):
-                try:
-                    qty = int(qte)
-                except (ValueError, TypeError):
-                    qty = 1
-                ligne = LigneBDC(
-                    bdc_id=bdc.id,
-                    ordre=i,
-                    designation=desig,
-                    quantite=qty,
-                    observations=obs_l,
-                )
-                db.session.add(ligne)
+                for i, (desig, qte, obs_l) in enumerate(lignes_valides, 1):
+                    try:
+                        qty = int(qte)
+                    except (ValueError, TypeError):
+                        qty = 1
+                    ligne = LigneBDC(
+                        bdc_id=bdc.id,
+                        ordre=i,
+                        designation=desig,
+                        quantite=qty,
+                        observations=obs_l,
+                    )
+                    db.session.add(ligne)
 
-            enregistrer_action(bdc, 'creation', nouveau_statut=statut_initial,
-                                details=f"Bon créé par {current_user.nom_complet} ({current_user.role_label})")
-            if statut_initial == 'validee':
-                enregistrer_action(bdc, 'validation_dt',
-                                    ancien_statut='en_attente', nouveau_statut='validee',
-                                    details=f"Transmission validée dès création par {current_user.nom_complet} ({current_user.role_label})")
+                enregistrer_action(bdc, 'creation', nouveau_statut=statut_initial,
+                                    details=f"Bon créé par {current_user.nom_complet} ({current_user.role_label})")
+                if statut_initial == 'validee':
+                    enregistrer_action(bdc, 'validation_dt',
+                                        ancien_statut='en_attente', nouveau_statut='validee',
+                                        details=f"Transmission validée dès création par {current_user.nom_complet} ({current_user.role_label})")
 
-            db.session.commit()
+                db.session.commit()
+            except Exception as e_save:
+                db.session.rollback()
+                app.logger.error(f"Erreur enregistrement BDC: {e_save}")
+                flash(f"Une erreur est survenue lors de l'enregistrement du bon de commande : {str(e_save)}", 'danger')
+                fournisseurs_carnet = Fournisseur.query.order_by(Fournisseur.nom.asc()).all()
+                return render_template('bdc/create.html',
+                                       demandeur_defaut=current_user.nom_complet,
+                                       service_defaut=current_user.role_label,
+                                       fournisseurs_carnet=fournisseurs_carnet)
 
             # Si validé dès la création par le DT ou la personne habilitée, expédier automatiquement par WhatsApp si actif
             if statut_initial == 'validee':
@@ -1673,6 +1679,26 @@ def create_app():
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
+
+            # Suppression de la contrainte unique globale sur numero
+            # pour permettre la numerotation mensuelle independante (BDC-MM/YY-00001)
+            try:
+                db.session.execute(text("ALTER TABLE bons_de_commande DROP CONSTRAINT IF EXISTS bons_de_commande_numero_key CASCADE"))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+            try:
+                db.session.execute(text("DROP INDEX IF EXISTS bons_de_commande_numero_key"))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+            try:
+                db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_bons_de_commande_numero ON bons_de_commande (numero)"))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
             # Paramètres par défaut de la passerelle WhatsApp
             try:

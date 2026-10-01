@@ -167,7 +167,7 @@ STATUTS_COULEURS = {
 class BonDeCommande(db.Model):
     __tablename__ = 'bons_de_commande'
     id                       = db.Column(db.Integer, primary_key=True)
-    numero                   = db.Column(db.Integer, unique=True, nullable=False)
+    numero                   = db.Column(db.Integer, nullable=False, index=True)
     date_creation            = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Type de bon : 'vehicule' ou 'garage'
