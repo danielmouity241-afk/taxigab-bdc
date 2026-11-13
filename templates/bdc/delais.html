@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}Suivi des Délais Fournisseur — TAXI GAB+{% endblock %}
+{% block page_title %}<i class="bi bi-hourglass-split me-2 text-warning"></i>Espace Suivi des Délais Fournisseur{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold text-navy mb-1">
+      <i class="bi bi-calendar-check me-2"></i>Espace Suivi des Délais & Pièces en Attente
+    </h4>
+    <p class="text-muted small mb-0">
+      Suivi rigoureux des délais de livraison convenus avec le fournisseur, contrôle des retards et alertes d'échéance.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('bdc_list') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-list-ul me-1"></i>Tous les bons
+    </a>
+    {% if current_user.can_creer_bdc %}
+    <a href="{{ url_for('bdc_create') }}" class="btn btn-primary-navy btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Nouveau BDC
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── BANNIÈRE D'ALERTE PRINCIPALE ──────────────────────────────────────── -->
+{% if nb_alertes > 0 %}
+<div class="alert alert-danger border-2 border-danger shadow-sm mb-4 d-flex align-items-start gap-3">
+  <div class="p-2 bg-danger text-white rounded-circle">
+    <i class="bi bi-exclamation-triangle-fill fs-3"></i>
+  </div>
+  <div class="flex-grow-1">
+    <h5 class="alert-heading fw-bold mb-1">
+      ⚠️ ALERTE SYSTÈME : {{ nb_alertes }} pièce(s) ont atteint ou dépassé la date de livraison promise !
+    </h5>
+    <p class="mb-2 small">
+      Ces pièces commandées auprès du fournisseur avaient une date d'engagement qui est arrivée à terme. 
+      Le magasinier, le fournisseur et la Direction Technique sont notifiés pour effectuer la livraison ou la mise à jour immédiate.
+    </p>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('bdc_delais', filtre='retard') }}" class="btn btn-danger btn-sm fw-bold">
+        <i class="bi bi-arrow-right-circle me-1"></i>Filtrer uniquement les {{ nb_alertes }} pièce(s) en retard
+      </a>
+      <a href="{{ url_for('suivi') }}" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-box-seam me-1"></i>Aller au suivi des réceptions
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── KPI COMPTEURS ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('bdc_delais', filtre='retard') }}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100 p-3 {% if pieces_en_retard_count + pieces_aujourdhui_count > 0 %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small fw-semibold text-uppercase">Retards & Échues</span>
+          <i class="bi bi-exclamation-octagon-fill fs-4"></i>
+        </div>
+        <div class="fs-2 fw-bold">{{ pieces_en_retard_count + pieces_aujourdhui_count }}</div>
+        <div class="small {% if pieces_en_retard_count + pieces_aujourdhui_count > 0 %}text-white-50{% else %}text-muted{% endif %}">
+          {{ pieces_aujourdhui_count }} aujourd'hui, {{ pieces_en_retard_count }} dépassée(s)
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('bdc_delais', filtre='proche') }}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100 p-3 bg-light text-dark border border-warning">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small fw-semibold text-uppercase text-warning text-dark">Sous 48 heures</span>
+          <i class="bi bi-clock-history fs-4 text-warning"></i>
+        </div>
+        <div class="fs-2 fw-bold text-dark">{{ pieces_proches_count }}</div>
+        <div class="small text-muted">Échéance imminente (J+1 à J+2)</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('bdc_delais', filtre='a_venir') }}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100 p-3 bg-light text-dark border border-primary">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small fw-semibold text-uppercase text-primary">À venir (> 48h)</span>
+          <i class="bi bi-calendar-event fs-4 text-primary"></i>
+        </div>
+        <div class="fs-2 fw-bold text-navy">{{ pieces_a_venir_count }}</div>
+        <div class="small text-muted">Délais respectant le calendrier</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('bdc_delais', filtre='traites') }}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100 p-3 bg-light text-dark border border-success">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small fw-semibold text-uppercase text-success">Livrées & Conformes</span>
+          <i class="bi bi-check2-circle fs-4 text-success"></i>
+        </div>
+        <div class="fs-2 fw-bold text-success">{{ pieces_honorees_count }}</div>
+        <div class="small text-muted">Pièces ayant eu un délai et reçues</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- ── FILTRES ET RECHERCHE ──────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-3">
+    <form method="GET" action="{{ url_for('bdc_delais') }}" class="row g-2 align-items-center">
+      <input type="hidden" name="filtre" value="{{ filtre }}">
+      
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Rechercher pièce, véhicule, transporteur..."
+                 value="{{ f_recherche }}">
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <select name="fournisseur" class="form-select form-select-sm">
+          <option value="">Tous les fournisseurs</option>
+          {% for f in fournisseurs_liste %}
+          <option value="{{ f }}" {% if f_fournisseur == f %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary-navy btn-sm flex-grow-1">
+          <i class="bi bi-funnel me-1"></i>Filtrer
+        </button>
+        {% if f_recherche or f_fournisseur or filtre != 'tous' %}
+        <a href="{{ url_for('bdc_delais') }}" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
+          <i class="bi bi-x-circle"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── ONGLETS DE NAVIGATION PAR STATUT ─────────────────────────────────── -->
+<ul class="nav nav-pills mb-3 gap-2 flex-wrap">
+  <li class="nav-item">
+    <a class="nav-link {% if filtre == 'tous' %}active bg-navy text-white{% else %}bg-white border text-dark{% endif %}"
+       href="{{ url_for('bdc_delais', filtre='tous', q=f_recherche, fournisseur=f_fournisseur) }}">
+      <i class="bi bi-collection me-1"></i>Toutes les pièces ({{ toutes_lignes_count }})
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filtre == 'retard' %}active bg-danger text-white{% else %}bg-white border text-danger{% endif %}"
+       href="{{ url_for('bdc_delais', filtre='retard', q=f_recherche, fournisseur=f_fournisseur) }}">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>En retard / Échues ({{ pieces_en_retard_count + pieces_aujourdhui_count }})
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filtre == 'proche' %}active bg-warning text-dark{% else %}bg-white border text-dark{% endif %}"
+       href="{{ url_for('bdc_delais', filtre='proche', q=f_recherche, fournisseur=f_fournisseur) }}">
+      <i class="bi bi-clock-history me-1"></i>Sous 48h ({{ pieces_proches_count }})
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filtre == 'a_venir' %}active bg-primary text-white{% else %}bg-white border text-dark{% endif %}"
+       href="{{ url_for('bdc_delais', filtre='a_venir', q=f_recherche, fournisseur=f_fournisseur) }}">
+      <i class="bi bi-calendar-week me-1"></i>À venir ({{ pieces_a_venir_count }})
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filtre == 'traites' %}active bg-success text-white{% else %}bg-white border text-success{% endif %}"
+       href="{{ url_for('bdc_delais', filtre='traites', q=f_recherche, fournisseur=f_fournisseur) }}">
+      <i class="bi bi-check-circle-fill me-1"></i>Livrées & reçues ({{ pieces_honorees_count }})
+    </a>
+  </li>
+</ul>
+
+<!-- ── TABLEAU PRINCIPAL DES PIÈCES SOUS DÉLAI ──────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+    <h6 class="mb-0 fw-bold text-navy">
+      <i class="bi bi-list-check me-2"></i>Liste des Pièces avec Engagement de Délai ({{ lignes|length }})
+    </h6>
+    <span class="badge bg-light text-muted border">Trié par date d'échéance</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-bordered align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:130px;">N° BDC</th>
+          <th>DÉSIGNATION & QTÉ</th>
+          <th>FOURNISSEUR</th>
+          <th>AFFECTATION</th>
+          <th>DÉLAI PROMIS</th>
+          <th style="width:140px;">ÉCHÉANCE PRÉVUE</th>
+          <th class="text-center" style="width:170px;">COMPTEUR / ÉTAT</th>
+          <th class="text-center" style="width:130px;">FOURNISSEUR</th>
+          <th class="text-center" style="width:130px;">RÉCEPTION DT</th>
+          <th class="text-center" style="width:90px;">ACTIONS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if lignes %}
+          {% for l in lignes %}
+          {% set b = l.bon %}
+          <tr class="{% if l.est_en_retard_delai %}table-danger-soft{% elif l.est_echeance_proche %}table-warning-soft{% elif l.statut_reception == 'recu' %}table-success-soft{% endif %}">
+            <!-- N° BDC -->
+            <td>
+              <a href="{{ url_for('bdc_view', id=b.id) }}" class="fw-bold font-monospace text-decoration-none">
+                {{ b.numero_affiche }}
+              </a>
+              {% if b.est_garage %}
+              <div><span class="badge bg-success" style="font-size:0.65rem;">GARAGE</span></div>
+              {% elif b.est_assurance %}
+              <div><span class="badge" style="background-color:#581c87; color:white; font-size:0.65rem;">ASSURANCE</span></div>
+              {% endif %}
+            </td>
+
+            <!-- Désignation & Qté -->
+            <td>
+              <strong class="text-navy d-block">{{ l.designation }}</strong>
+              <div class="small">
+                <span class="badge bg-light text-dark border">Qté cmd : <strong>{{ l.quantite }}</strong></span>
+                {% if l.quantite_recue %}
+                <span class="badge bg-success-soft text-success border border-success">Reçu : {{ l.quantite_recue }}/{{ l.quantite }}</span>
+                {% endif %}
+              </div>
+              {% if l.motif_delai %}
+              <div class="small text-muted mt-1 fst-italic">
+                <i class="bi bi-info-circle me-1"></i>Motif : {{ l.motif_delai }}
+              </div>
+              {% endif %}
+            </td>
+
+            <!-- Fournisseur -->
+            <td>
+              <strong class="text-dark">{{ b.fournisseur or '—' }}</strong>
+              {% if b.fournisseur_whatsapp %}
+              <div class="small text-success"><i class="bi bi-whatsapp me-1"></i>{{ b.fournisseur_whatsapp }}</div>
+              {% endif %}
+            </td>
+
+            <!-- Affectation / Véhicule -->
+            <td>
+              {% if b.est_garage %}
+                <span class="badge bg-success-soft text-success border border-success"><i class="bi bi-tools me-1"></i>Atelier Garage</span>
+              {% elif b.vehicule_nom %}
+                <span class="badge bg-navy-soft text-navy fw-semibold">{{ b.vehicule_nom }}</span>
+                {% if b.vehicule_immatriculation %}<div class="small text-muted">{{ b.vehicule_immatriculation }}</div>{% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+              {% if b.transporteur %}
+              <div class="small text-muted mt-1"><i class="bi bi-truck me-1"></i>{{ b.transporteur }}</div>
+              {% endif %}
+            </td>
+
+            <!-- Délai promis -->
+            <td>
+              <span class="badge bg-secondary-soft text-dark border">
+                <i class="bi bi-clock me-1"></i>{{ l.delai_livraison_texte or 'Délai fixé' }}
+              </span>
+              {% if l.date_definition_delai %}
+              <div class="text-muted" style="font-size:0.7rem;">Fixé le {{ l.date_definition_delai.strftime('%d/%m/%Y') }}</div>
+              {% endif %}
+            </td>
+
+            <!-- Date d'échéance prévue -->
+            <td>
+              {% if l.date_livraison_prevue %}
+                <strong class="{% if l.est_en_retard_delai %}text-danger{% elif l.est_echeance_proche %}text-warning-dark{% else %}text-navy{% endif %}">
+                  {{ l.date_livraison_prevue.strftime('%d/%m/%Y') }}
+                </strong>
+              {% else %}
+                <span class="text-muted">— Non daté —</span>
+              {% endif %}
+            </td>
+
+            <!-- Compteur / État -->
+            <td class="text-center">
+              {% if l.statut_reception == 'recu' %}
+                <span class="badge bg-success py-1 px-2">
+                  <i class="bi bi-check-circle-fill me-1"></i>Honoré & Reçu
+                </span>
+                {% if l.date_reception %}
+                <div class="text-muted" style="font-size:0.7rem;">le {{ l.date_reception.strftime('%d/%m/%Y') }}</div>
+                {% endif %}
+              {% elif l.date_livraison_prevue %}
+                {% set jours = l.jours_restants_delai %}
+                {% if jours < 0 %}
+                  <span class="badge bg-danger py-1 px-2 animate-pulse">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>RETARD DE {{ -jours }} J.
+                  </span>
+                  <div class="text-danger fw-bold" style="font-size:0.75rem;">Délai dépassé !</div>
+                {% elif jours == 0 %}
+                  <span class="badge bg-danger py-1 px-2">
+                    <i class="bi bi-bell-fill me-1"></i>AUJOURD'HUI
+                  </span>
+                  <div class="text-danger fw-semibold" style="font-size:0.75rem;">Date limite atteinte</div>
+                {% elif jours <= 2 %}
+                  <span class="badge bg-warning text-dark py-1 px-2">
+                    <i class="bi bi-hourglass-bottom me-1"></i>Dans {{ jours }} jour(s)
+                  </span>
+                  <div class="text-warning-dark" style="font-size:0.75rem;">Échéance proche</div>
+                {% else %}
+                  <span class="badge bg-primary-soft text-primary border border-primary py-1 px-2">
+                    <i class="bi bi-calendar-event me-1"></i>Dans {{ jours }} jours
+                  </span>
+                {% endif %}
+              {% else %}
+                <span class="badge bg-secondary">Délai indicatif</span>
+              {% endif %}
+            </td>
+
+            <!-- Statut Fournisseur -->
+            <td class="text-center">
+              {% if b.fournisseur_a_livre %}
+                <span class="badge bg-info text-white" title="Livraison déclarée effectuée par le fournisseur">
+                  <i class="bi bi-truck me-1"></i>Livré fourn.
+                </span>
+                {% if b.date_livraison_fournisseur %}
+                <div class="text-muted" style="font-size:0.7rem;">{{ b.date_livraison_fournisseur.strftime('%d/%m') }}</div>
+                {% endif %}
+              {% elif b.fournisseur_a_valide %}
+                <span class="badge bg-warning text-dark" title="Bon validé et pris en charge par le fournisseur">
+                  <i class="bi bi-patch-check me-1"></i>Pris en charge
+                </span>
+              {% else %}
+                <span class="badge bg-light text-muted border">En attente fourn.</span>
+              {% endif %}
+            </td>
+
+            <!-- Réception Magasinier DT -->
+            <td class="text-center">
+              {% if b.reception_magasinier_validee or l.statut_reception == 'recu' %}
+                <span class="badge bg-success" title="Certifié reçu physiquement à la Direction Technique">
+                  <i class="bi bi-shield-check me-1"></i>Reçu DT
+                </span>
+                {% if b.date_reception_magasinier %}
+                <div class="text-muted" style="font-size:0.7rem;">{{ b.date_reception_magasinier.strftime('%d/%m') }}</div>
+                {% endif %}
+              {% elif l.statut_reception == 'partiel' %}
+                <span class="badge bg-warning text-dark">Partiel</span>
+              {% else %}
+                <span class="badge bg-danger-soft text-danger border border-danger">Non reçu</span>
+              {% endif %}
+            </td>
+
+            <!-- Actions directes -->
+            <td class="text-center">
+              <a href="{{ url_for('bdc_view', id=b.id) }}" class="btn btn-sm btn-outline-primary py-1 px-2" title="Ouvrir le bon">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" class="text-center py-5 text-muted">
+              <i class="bi bi-check2-circle fs-1 text-success d-block mb-2"></i>
+              <strong>Aucune pièce trouvée dans cette catégorie de délai.</strong>
+              <div class="small mt-1">Tous les délais sont respectés ou aucune commande n'est en attente de livraison.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

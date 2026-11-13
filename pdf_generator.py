@@ -400,71 +400,51 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
         mat_rows = list(mat_header)
 
         for i, ligne in enumerate(bdc.lignes, 1):
-
             if ligne.statut_reception == 'recu':
-
                 etat_str = f"<font color='#198754'><b>LIVRÉE ({ligne.quantite_recue}/{ligne.quantite})</b></font>"
-
             elif ligne.statut_reception == 'partiel':
-
                 etat_str = f"<font color='#d97706'><b>PARTIEL ({ligne.quantite_recue or 0}/{ligne.quantite})</b></font>"
-
             else:
-
                 etat_str = "<font color='#dc3545'><b>NON LIVRÉE</b></font>"
 
-
+            # Ajout du délai promis fournisseur si défini
+            if getattr(ligne, 'delai_livraison_texte', None) or getattr(ligne, 'date_livraison_prevue', None):
+                date_p_str = f" ({ligne.date_livraison_prevue.strftime('%d/%m/%Y')})" if getattr(ligne, 'date_livraison_prevue', None) else ""
+                motif_p = f" [{ligne.motif_delai}]" if getattr(ligne, 'motif_delai', None) else ""
+                etat_str += f"<br/><font color='#b45309'><b>⏳ Délai: {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
 
             row = [
-
                 Paragraph(str(i), S['value']),
-
                 Paragraph(ligne.designation or '', S['value']),
-
                 Paragraph(str(ligne.quantite), S['value']),
-
                 Paragraph(str(ligne.quantite_recue or 0), S['value']),
-
                 Paragraph(etat_str, S['value']),
-
             ]
-
             mat_rows.append(row)
-
     else:
-
         # Tableau standard
-
         mat_col_widths = [1.2*cm, page_width - 1.2*cm - 2.5*cm - 5*cm, 2.5*cm, 5*cm]
-
         mat_header = [[
-
             Paragraph("<b>N°</b>", S['label']),
-
             Paragraph("<b>DÉSIGNATION</b>", S['label']),
-
             Paragraph("<b>QTÉ</b>", S['label']),
-
             Paragraph("<b>OBSERVATIONS</b>", S['label']),
-
         ]]
-
         mat_rows = list(mat_header)
-
         for i, ligne in enumerate(bdc.lignes, 1):
+            obs_content = ligne.observations or ''
+            if getattr(ligne, 'delai_livraison_texte', None) or getattr(ligne, 'date_livraison_prevue', None):
+                date_p_str = f" (prévu le {ligne.date_livraison_prevue.strftime('%d/%m/%Y')})" if getattr(ligne, 'date_livraison_prevue', None) else ""
+                motif_p = f" [{ligne.motif_delai}]" if getattr(ligne, 'motif_delai', None) else ""
+                delai_mention = f"<font color='#b45309'><b>⏳ Délai promis : {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
+                obs_content = f"{obs_content}<br/>{delai_mention}" if obs_content else delai_mention
 
             row = [
-
                 Paragraph(str(i), S['value']),
-
                 Paragraph(ligne.designation or '', S['value']),
-
                 Paragraph(str(ligne.quantite), S['value']),
-
-                Paragraph(ligne.observations or '', S['value']),
-
+                Paragraph(obs_content or '', S['value']),
             ]
-
             mat_rows.append(row)
 
 
@@ -593,30 +573,36 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
 
 
 
+    # Mentions de visas automatiques
+    info_gauche = ""
+    if getattr(bdc, 'fournisseur_a_valide', False):
+        d_val = bdc.date_validation_fournisseur.strftime('%d/%m/%Y') if bdc.date_validation_fournisseur else ""
+        info_gauche = f"<font color='#0a2744'><b>Validé Fournisseur le {d_val}</b></font>"
+        if getattr(bdc, 'fournisseur_a_livre', False):
+            d_liv = bdc.date_livraison_fournisseur.strftime('%d/%m/%Y') if bdc.date_livraison_fournisseur else ""
+            info_gauche += f"<br/><font color='#166534'><b>Livraison effectuée le {d_liv}</b></font>"
+
+    info_droite = ""
+    if getattr(bdc, 'date_validation_dt', None):
+        d_dt = bdc.date_validation_dt.strftime('%d/%m/%Y')
+        info_droite = f"<font color='#0a2744'><b>Validé DT le {d_dt}</b></font>"
+    if getattr(bdc, 'reception_magasinier_validee', False):
+        d_mag = bdc.date_reception_magasinier.strftime('%d/%m/%Y') if bdc.date_reception_magasinier else ""
+        info_droite += f"<br/><font color='#166534'><b>Réception physique DT certifiée le {d_mag}</b></font>"
+
     sign_data = [[
-
         Paragraph(titre_gauche, S['sign_title']),
-
         Paragraph("DIRECTION TECHNIQUE", S['sign_title']),
-
     ],[
-
         Paragraph(sub_gauche, S['sign_sub']),
-
         Paragraph("Signature & Cachet", S['sign_sub']),
-
     ],[
-
-        '', ''
-
+        Paragraph(info_gauche, S['sign_sub']) if info_gauche else '',
+        Paragraph(info_droite, S['sign_sub']) if info_droite else '',
     ],[
-
         '', ''
-
     ],[
-
         '', ''
-
     ]]
 
     sign_table = Table(sign_data,

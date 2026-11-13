@@ -133,18 +133,42 @@
                   <th style="width:75px;" class="text-center">REÇU</th>
                   <th>LIVREUR EFFECTIF & NOTES</th>
                   <th class="text-center" style="width:120px;">ÉTAT PIÈCE</th>
-                  {% if bdc.statut not in ['annulee', 'refusee'] and peut_gerer_stock %}
-                  <th class="text-center" style="width:170px;">ACTION LIVRAISON</th>
+                  {% if bdc.statut not in ['annulee', 'refusee'] and (peut_gerer_stock or current_user.can_valider_fournisseur) %}
+                  <th class="text-center" style="width:200px;">ACTIONS / POINTAGE</th>
                   {% endif %}
                 </tr>
               </thead>
               <tbody>
                 {% for ligne in bdc.lignes %}
-                <tr class="{% if ligne.statut_reception == 'recu' %}table-success-soft{% elif ligne.statut_reception == 'partiel' %}table-warning-soft{% endif %}">
+                <tr class="{% if ligne.statut_reception == 'recu' %}table-success-soft{% elif ligne.statut_reception == 'partiel' %}table-warning-soft{% elif ligne.est_en_retard_delai %}table-danger-soft{% endif %}">
                   <td class="text-center align-middle fw-bold">{{ loop.index }}</td>
                   <td class="align-middle">
                     <span class="fw-semibold text-navy">{{ ligne.designation }}</span>
                     {% if ligne.observations %}<div><small class="text-muted">{{ ligne.observations }}</small></div>{% endif %}
+                    {% if ligne.a_delai %}
+                      <div class="mt-1">
+                        {% if ligne.statut_reception == 'recu' %}
+                          <span class="badge bg-success-soft text-success border border-success small">
+                            <i class="bi bi-check2-circle me-1"></i>Délai honoré (Reçu)
+                          </span>
+                        {% elif ligne.est_en_retard_delai %}
+                          <span class="badge bg-danger py-1 px-2 shadow-xs">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>ÉCHU : {{ ligne.delai_livraison_texte }} ({{ -ligne.jours_restants_delai }}j de retard)
+                          </span>
+                        {% elif ligne.est_echeance_proche %}
+                          <span class="badge bg-warning text-dark py-1 px-2">
+                            <i class="bi bi-clock-history me-1"></i>Délai fournisseur : {{ ligne.delai_livraison_texte }} (le {{ ligne.date_livraison_prevue.strftime('%d/%m/%Y') }})
+                          </span>
+                        {% else %}
+                          <span class="badge bg-primary-soft text-primary border border-primary py-1 px-2">
+                            <i class="bi bi-calendar-event me-1"></i>Délai promis : {{ ligne.delai_livraison_texte }} ({{ ligne.date_livraison_prevue.strftime('%d/%m/%Y') if ligne.date_livraison_prevue else '' }})
+                          </span>
+                        {% endif %}
+                        {% if ligne.motif_delai %}
+                        <span class="text-muted small fst-italic ms-1">({{ ligne.motif_delai }})</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
                   </td>
                   <td class="text-center align-middle fw-bold">{{ ligne.quantite }}</td>
                   <td class="text-center align-middle fw-bold">
@@ -170,28 +194,37 @@
                     <div class="text-muted" style="font-size:0.7rem;">{{ ligne.date_reception.strftime('%d/%m %H:%M') }}</div>
                     {% endif %}
                   </td>
-                  {% if bdc.statut not in ['annulee', 'refusee'] and peut_gerer_stock %}
+                  {% if bdc.statut not in ['annulee', 'refusee'] and (peut_gerer_stock or current_user.can_valider_fournisseur) %}
                   <td class="text-center align-middle">
                     <div class="btn-group btn-group-sm" role="group">
-                      {% if ligne.statut_reception != 'recu' %}
-                      <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='livre') }}" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-success py-1 px-2" title="Marquer cette pièce comme Livrée">
-                          <i class="bi bi-check-lg me-1"></i>Livré
+                      {% if peut_gerer_stock %}
+                        {% if ligne.statut_reception != 'recu' %}
+                        <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='livre') }}" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-success py-1 px-2" title="Marquer cette pièce comme Livrée">
+                            <i class="bi bi-check-lg me-1"></i>Livré
+                          </button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='non_recu') }}" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" title="Marquer cette pièce comme Non livrée">
+                            <i class="bi bi-x-lg me-1"></i>Non livré
+                          </button>
+                        </form>
+                        {% endif %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" data-bs-toggle="modal" data-bs-target="#modal-ligne-{{ ligne.id }}" title="Modifier détails réception">
+                          <i class="bi bi-pencil-square"></i>
                         </button>
-                      </form>
-                      {% else %}
-                      <form method="POST" action="{{ url_for('bdc_reception_rapide', id=bdc.id, ligne_id=ligne.id, action='non_recu') }}" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" title="Marquer cette pièce comme Non livrée">
-                          <i class="bi bi-x-lg me-1"></i>Non livré
-                        </button>
-                      </form>
                       {% endif %}
-                      <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" data-bs-toggle="modal" data-bs-target="#modal-ligne-{{ ligne.id }}" title="Modifier détails (quantité, livreur...)">
-                        <i class="bi bi-pencil-square"></i>
+
+                      {% if current_user.can_valider_fournisseur %}
+                      <button type="button" class="btn btn-sm btn-outline-warning text-dark py-1 px-2" data-bs-toggle="modal" data-bs-target="#modal-delai-{{ ligne.id }}" title="Définir un délai de livraison (1 sem, 2 sem, 3 sem, 1 mois...)">
+                        <i class="bi bi-hourglass-split me-1"></i>Délai
                       </button>
+                      {% endif %}
                     </div>
 
-                    <!-- Modal Modification Pièce -->
+                    <!-- Modal Modification Pièce (Magasinier) -->
+                    {% if peut_gerer_stock %}
                     <div class="modal fade" id="modal-ligne-{{ ligne.id }}" tabindex="-1">
                       <div class="modal-dialog modal-dialog-centered text-start">
                         <div class="modal-content">
@@ -244,6 +277,87 @@
                         </div>
                       </div>
                     </div>
+                    {% endif %}
+
+                    <!-- Modal Définition Délai Pièce (Fournisseur) -->
+                    {% if current_user.can_valider_fournisseur %}
+                    <div class="modal fade" id="modal-delai-{{ ligne.id }}" tabindex="-1">
+                      <div class="modal-dialog modal-dialog-centered text-start">
+                        <div class="modal-content border-0 shadow">
+                          <div class="modal-header bg-warning text-dark py-2">
+                            <h6 class="modal-title fs-6 fw-bold">
+                              <i class="bi bi-hourglass-split me-2"></i>Délai Fournisseur : {{ ligne.designation }}
+                            </h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                          </div>
+                          <form method="POST" action="{{ url_for('bdc_definir_delai_piece', id=bdc.id) }}">
+                            <input type="hidden" name="ligne_id" value="{{ ligne.id }}">
+                            <div class="modal-body">
+                              <div class="alert alert-light border small text-muted mb-3">
+                                <i class="bi bi-info-circle text-primary me-1"></i>
+                                Indiquez le délai estimé pour la livraison de cette pièce. L'information s'affichera sur le bon de commande officiel et alertera l'équipe technique à l'échéance.
+                              </div>
+                              <div class="mb-3">
+                                <label class="form-label small fw-bold">Délai estimé</label>
+                                <div class="d-grid gap-2">
+                                  <div class="form-check p-2 border rounded bg-white">
+                                    <input class="form-check-input ms-0 me-2" type="radio" name="delai_choix" id="delai_1s_{{ ligne.id }}" value="1_semaine" {% if ligne.delai_livraison_texte == 'Dans 1 semaine' %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="delai_1s_{{ ligne.id }}">
+                                      Dans 1 semaine <span class="text-muted fw-normal">(~7 jours)</span>
+                                    </label>
+                                  </div>
+                                  <div class="form-check p-2 border rounded bg-white">
+                                    <input class="form-check-input ms-0 me-2" type="radio" name="delai_choix" id="delai_2s_{{ ligne.id }}" value="2_semaines" {% if ligne.delai_livraison_texte == 'Dans 2 semaines' %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="delai_2s_{{ ligne.id }}">
+                                      Dans 2 semaines <span class="text-muted fw-normal">(~14 jours)</span>
+                                    </label>
+                                  </div>
+                                  <div class="form-check p-2 border rounded bg-white">
+                                    <input class="form-check-input ms-0 me-2" type="radio" name="delai_choix" id="delai_3s_{{ ligne.id }}" value="3_semaines" {% if ligne.delai_livraison_texte == 'Dans 3 semaines' %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="delai_3s_{{ ligne.id }}">
+                                      Dans 3 semaines <span class="text-muted fw-normal">(~21 jours)</span>
+                                    </label>
+                                  </div>
+                                  <div class="form-check p-2 border rounded bg-white">
+                                    <input class="form-check-input ms-0 me-2" type="radio" name="delai_choix" id="delai_1m_{{ ligne.id }}" value="1_mois" {% if ligne.delai_livraison_texte == 'Dans 1 mois' %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="delai_1m_{{ ligne.id }}">
+                                      Dans 1 mois <span class="text-muted fw-normal">(~30 jours)</span>
+                                    </label>
+                                  </div>
+                                  <div class="form-check p-2 border rounded bg-white">
+                                    <input class="form-check-input ms-0 me-2" type="radio" name="delai_choix" id="delai_perso_{{ ligne.id }}" value="personnalise" {% if ligne.delai_livraison_texte and ligne.delai_livraison_texte not in ['Dans 1 semaine', 'Dans 2 semaines', 'Dans 3 semaines', 'Dans 1 mois'] %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="delai_perso_{{ ligne.id }}">
+                                      Date personnalisée :
+                                    </label>
+                                    <input type="date" name="date_personnalisee" class="form-control form-control-sm mt-1"
+                                           value="{{ ligne.date_livraison_prevue.strftime('%Y-%m-%d') if ligne.date_livraison_prevue else '' }}">
+                                  </div>
+                                  {% if ligne.a_delai %}
+                                  <div class="form-check p-2 border rounded border-danger-subtle bg-white">
+                                    <input class="form-check-input ms-0 me-2 text-danger" type="radio" name="delai_choix" id="delai_annul_{{ ligne.id }}" value="annuler_delai">
+                                    <label class="form-check-label fw-bold text-danger" for="delai_annul_{{ ligne.id }}">
+                                      <i class="bi bi-x-circle me-1"></i>Retirer le délai (pièce prête immédiatement)
+                                    </label>
+                                  </div>
+                                  {% endif %}
+                                </div>
+                              </div>
+                              <div class="mb-3">
+                                <label class="form-label small fw-semibold">Motif / Justification du délai (Optionnel)</label>
+                                <input type="text" name="motif_delai" class="form-control form-control-sm"
+                                       value="{{ ligne.motif_delai or '' }}"
+                                       placeholder="ex: Rupture CFAO, commande spéciale, arrivage conteneur...">
+                              </div>
+                            </div>
+                            <div class="modal-footer py-2">
+                              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                              <button type="submit" class="btn btn-warning text-dark fw-bold btn-sm">Enregistrer le délai</button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                    {% endif %}
 
                   </td>
                   {% endif %}
@@ -722,6 +836,100 @@
         </button>
         {% endif %}
 
+        <!-- 2. RUBRIQUE FOURNISSEUR : VALIDATION & LIVRAISON -->
+        <div class="card border border-warning-subtle bg-warning bg-opacity-10 p-3 rounded mb-2 shadow-xs">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-dark small">
+              <i class="bi bi-shop me-1 text-warning"></i> Rubrique Fournisseur
+            </span>
+            {% if bdc.fournisseur_a_valide %}
+              <span class="badge bg-success"><i class="bi bi-check2-circle me-1"></i>Pris en charge</span>
+            {% else %}
+              <span class="badge bg-secondary">En attente prise en charge</span>
+            {% endif %}
+          </div>
+
+          <!-- Prise en charge / Validation Fournisseur -->
+          {% if bdc.fournisseur_a_valide %}
+            <div class="small text-success mb-2">
+              <i class="bi bi-patch-check-fill me-1"></i>Bon validé par le fournisseur
+              {% if bdc.validateur_fournisseur %}({{ bdc.validateur_fournisseur.nom_complet }}){% endif %}
+              <div class="text-muted" style="font-size:0.75rem;">Le {{ bdc.date_validation_fournisseur.strftime('%d/%m/%Y à %H:%M') if bdc.date_validation_fournisseur else '' }}</div>
+            </div>
+          {% else %}
+            {% if current_user.can_valider_fournisseur and bdc.statut not in ['annulee', 'refusee'] %}
+            <form method="POST" action="{{ url_for('bdc_valider_fournisseur', id=bdc.id) }}" class="mb-2">
+              <button type="submit" class="btn btn-warning text-dark fw-bold w-100 shadow-sm py-2">
+                <i class="bi bi-patch-check me-2"></i>Valider le bon (Fournisseur)
+              </button>
+            </form>
+            {% else %}
+            <div class="small text-muted mb-2">
+              <i class="bi bi-hourglass-split me-1"></i>En attente de validation par le fournisseur.
+            </div>
+            {% endif %}
+          {% endif %}
+
+          <!-- Déclaration de livraison Fournisseur -->
+          {% if bdc.fournisseur_a_livre %}
+            <div class="alert alert-info py-2 px-3 mb-0 small text-dark border-info bg-white">
+              <strong class="text-info d-block"><i class="bi bi-truck me-1"></i>Livraison déclarée par le Fournisseur</strong>
+              <div class="text-muted" style="font-size:0.75rem;">
+                Le {{ bdc.date_livraison_fournisseur.strftime('%d/%m/%Y à %H:%M') if bdc.date_livraison_fournisseur else '' }}
+                {% if bdc.livreur_fournisseur %}par {{ bdc.livreur_fournisseur.nom_complet }}{% endif %}
+              </div>
+              {% if bdc.note_livraison_fournisseur %}
+              <div class="small mt-1 fst-italic">Note : {{ bdc.note_livraison_fournisseur }}</div>
+              {% endif %}
+            </div>
+          {% else %}
+            {% if current_user.can_valider_fournisseur and bdc.statut not in ['annulee', 'refusee'] %}
+            <button type="button" class="btn btn-outline-info text-dark fw-semibold w-100 btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modal-livrer-fournisseur">
+              <i class="bi bi-truck-flatbed me-2"></i>Déclarer le bon comme Livré (Fournisseur)
+            </button>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <!-- 3. RUBRIQUE MAGASINIER : CERTIFICATION DE RÉCEPTION PHYSIQUE À LA DT -->
+        <div class="card border border-success-subtle bg-success bg-opacity-10 p-3 rounded mb-2 shadow-xs">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-dark small">
+              <i class="bi bi-shield-check me-1 text-success"></i> Réception Physique Magasinier (DT)
+            </span>
+            {% if bdc.reception_magasinier_validee %}
+              <span class="badge bg-success"><i class="bi bi-check-all me-1"></i>Certifié Reçu DT</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">En attente réception DT</span>
+            {% endif %}
+          </div>
+
+          {% if bdc.reception_magasinier_validee %}
+            <div class="alert alert-success py-2 px-3 mb-0 small text-success border-success bg-white">
+              <strong class="text-success d-block"><i class="bi bi-check2-circle me-1"></i>Réception physique certifiée conforme au magasin DT</strong>
+              <div class="text-muted" style="font-size:0.75rem;">
+                Le {{ bdc.date_reception_magasinier.strftime('%d/%m/%Y à %H:%M') if bdc.date_reception_magasinier else '' }}
+                {% if bdc.magasinier_reception %}par {{ bdc.magasinier_reception.nom_complet }}{% endif %}
+              </div>
+              {% if bdc.note_reception_magasinier %}
+              <div class="small mt-1 text-dark fst-italic">Observation DT : {{ bdc.note_reception_magasinier }}</div>
+              {% endif %}
+            </div>
+          {% else %}
+            {% if peut_gerer_stock and bdc.statut not in ['en_attente', 'refusee', 'annulee'] %}
+            <button type="button" class="btn btn-success fw-bold w-100 shadow-sm py-2"
+                    data-bs-toggle="modal" data-bs-target="#modal-reception-magasinier">
+              <i class="bi bi-shield-check me-2"></i>Certifier la Réception Physique à la DT
+            </button>
+            {% else %}
+            <div class="small text-muted">
+              <i class="bi bi-info-circle me-1"></i>Le magasinier validera cette rubrique lors de l'arrivée physique des pièces au magasin DT.
+            </div>
+            {% endif %}
+          {% endif %}
+        </div>
+
         <!-- 2. LIVRAISON PAR LE FOURNISSEUR (strictement si validé) -->
         {% if peut_gerer_stock and bdc.statut == 'validee' %}
         <button type="button" class="btn btn-info text-white fw-semibold"
@@ -1114,6 +1322,77 @@
   </div>
 </div>
 
+<!-- MODAL DÉCLARATION LIVRAISON FOURNISSEUR -->
+<div class="modal fade text-start" id="modal-livrer-fournisseur" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-info text-white">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-truck me-2"></i>Déclaration de Livraison par le Fournisseur
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_livrer_fournisseur', id=bdc.id) }}">
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            En validant cette action, vous déclarez que le matériel commandé sur le bon <strong>N°{{ bdc.numero_affiche }}</strong> a été expédié ou livré à l'atelier de la Direction Technique TAXI GAB+.
+          </p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Note / N° Bon de livraison (BL) / Nom du transporteur livreur :</label>
+            <input type="text" name="note_livraison" class="form-control"
+                   placeholder="ex: BL N° 45892, remis en mains propres...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-info text-white btn-sm fw-bold">
+            <i class="bi bi-check2-circle me-1"></i>Confirmer la livraison fournisseur
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CERTIFICATION RÉCEPTION PHYSIQUE MAGASINIER (DT) -->
+<div class="modal fade text-start" id="modal-reception-magasinier" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-shield-check me-2"></i>Certification de Réception Physique au Magasin DT
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('bdc_confirmer_reception_magasinier', id=bdc.id) }}">
+        <div class="modal-body">
+          <div class="alert alert-success-soft border-success p-2 small text-success mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            En certifiant la réception, vous attestez en tant que magasinier que les pièces livrées sont bien arrivées physiquement dans les locaux de la Direction Technique.
+          </div>
+          <div class="form-check form-switch mb-3 p-2 bg-light rounded border">
+            <input class="form-check-input ms-0 me-2" type="checkbox" name="marquer_pieces_recues" id="check_auto_pieces" checked>
+            <label class="form-check-label fw-bold text-navy small" for="check_auto_pieces">
+              Marquer automatiquement toutes les pièces restantes comme reçues
+            </label>
+            <div class="small text-muted ms-4">Si certaines pièces restent sous délai ou non reçues, décochez cette case.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Remarque / État des pièces à la réception :</label>
+            <textarea name="note_reception" class="form-control" rows="2"
+                      placeholder="ex: Colis vérifié, pièces neuves et conformes..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-check2-all me-1"></i>Certifier la Réception Physique à la DT
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
 async function copierImageBDC(url) {

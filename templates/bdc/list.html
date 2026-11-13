@@ -169,7 +169,20 @@
               <br><small class="text-success">{{ bdc.pieces_recues }}/{{ bdc.total_pieces }} reçues</small>
               {% endif %}
             </td>
-            <td><span class="badge bg-{{ bdc.statut_couleur }}">{{ bdc.statut_label }}</span></td>
+            <td>
+              <span class="badge bg-{{ bdc.statut_couleur }}">{{ bdc.statut_label }}</span>
+              {% if bdc.fournisseur_a_valide %}
+                <div><span class="badge bg-warning text-dark border border-warning" style="font-size:0.65rem;" title="Validé par le fournisseur"><i class="bi bi-patch-check-fill me-1"></i>Fourn. validé</span></div>
+              {% endif %}
+              {% if bdc.reception_magasinier_validee %}
+                <div><span class="badge bg-success" style="font-size:0.65rem;" title="Réception physique certifiée au magasin DT"><i class="bi bi-shield-check me-1"></i>Reçu DT</span></div>
+              {% endif %}
+              {% if bdc.a_pieces_en_retard_delai %}
+                <div><span class="badge bg-danger shadow-xs" style="font-size:0.65rem;" title="Au moins une pièce a dépassé la date limite promise"><i class="bi bi-exclamation-triangle-fill me-1"></i>Délai échu</span></div>
+              {% elif bdc.a_pieces_avec_delai %}
+                <div><span class="badge bg-primary-soft text-primary border border-primary" style="font-size:0.65rem;" title="Pièces avec délai convenu"><i class="bi bi-clock-history me-1"></i>Pièce sous délai</span></div>
+              {% endif %}
+            </td>
             <td>
               <div class="d-flex gap-1">
                 <a href="{{ url_for('bdc_view', id=bdc.id) }}"

@@ -31,6 +31,7 @@ class User(UserMixin, db.Model):
     peut_voir_historique     = db.Column(db.Boolean, default=False)  # Accès à l'historique et la traçabilité
     peut_voir_archives       = db.Column(db.Boolean, default=False)  # Accès aux archives mensuelles
     est_spectateur           = db.Column(db.Boolean, default=False)  # Consultation totale et impression sans modification
+    peut_valider_fournisseur = db.Column(db.Boolean, default=False)  # Validation bon & délais par le fournisseur
 
     # Relations
     bons_crees    = db.relationship('BonDeCommande', foreign_keys='BonDeCommande.createur_id', backref='createur', lazy=True)
@@ -52,6 +53,8 @@ class User(UserMixin, db.Model):
             return {'label': 'Direction Technique (Admin)', 'color': 'primary', 'icon': 'bi-shield-shaded'}
         if self.role in ('DTA', 'Directeur Technique Adjoint'):
             return {'label': 'Dir. Technique Adjointe', 'color': 'primary', 'icon': 'bi-shield-check'}
+        if self.role in ('fournisseur', 'Fournisseur') or getattr(self, 'peut_valider_fournisseur', False):
+            return {'label': 'Fournisseur (Partenaire)', 'color': 'warning text-dark', 'icon': 'bi-shop'}
         if self.role in ('magasinier', 'Magasinier') or self.peut_gerer_stock:
             return {'label': 'Magasinier / Stock', 'color': 'success', 'icon': 'bi-box-seam-fill'}
         if self.role in ('transporteur', 'Transporteur') or self.peut_recuperer:
@@ -64,11 +67,31 @@ class User(UserMixin, db.Model):
             'DT': 'Directeur Technique',
             'DTA': 'Dir. Technique Adjoint',
             'magasinier': 'Magasinier',
+            'fournisseur': 'Fournisseur',
             'transporteur': 'Transporteur',
             'DG': 'Directeur Général',
             'PDG': 'Président Directeur Général',
         }
         return labels.get(self.role, self.role or 'Utilisateur')
+
+    @property
+    def is_fournisseur(self):
+        if not self.actif:
+            return False
+        return bool(self.role in ('fournisseur', 'Fournisseur') or getattr(self, 'peut_valider_fournisseur', False))
+
+    @property
+    def is_magasinier(self):
+        if not self.actif or self.est_spectateur:
+            return False
+        return bool(self.role in ('magasinier', 'Magasinier') or self.peut_gerer_stock)
+
+    @property
+    def can_valider_fournisseur(self):
+        if not self.actif:
+            return False
+        # Le fournisseur et le DT (super-admin pour test/assistance) peuvent valider côté fournisseur
+        return bool(self.is_fournisseur or self.is_directeur_technique or self.role in ('DT', 'Directeur Technique'))
 
     @property
     def can_creer_bdc(self):
@@ -224,6 +247,23 @@ class BonDeCommande(db.Model):
     nb_relances_whatsapp     = db.Column(db.Integer, default=0, nullable=False)
     date_derniere_relance    = db.Column(db.DateTime, nullable=True)
 
+    # Validation Fournisseur
+    fournisseur_a_valide     = db.Column(db.Boolean, default=False)
+    date_validation_fournisseur = db.Column(db.DateTime, nullable=True)
+    validateur_fournisseur_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Livraison déclarée par le fournisseur
+    fournisseur_a_livre      = db.Column(db.Boolean, default=False)
+    date_livraison_fournisseur = db.Column(db.DateTime, nullable=True)
+    livreur_fournisseur_id   = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    note_livraison_fournisseur = db.Column(db.String(256), nullable=True)
+
+    # Réception physique certifiée par le magasinier à la Direction Technique
+    reception_magasinier_validee = db.Column(db.Boolean, default=False)
+    date_reception_magasinier = db.Column(db.DateTime, nullable=True)
+    magasinier_reception_id  = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    note_reception_magasinier = db.Column(db.Text, nullable=True)
+
     # Impressions & Traçabilité des Doublons
     nb_impressions           = db.Column(db.Integer, default=0, nullable=False)
     date_derniere_impression = db.Column(db.DateTime, nullable=True)
@@ -239,6 +279,9 @@ class BonDeCommande(db.Model):
     magasinier_stock = db.relationship('User', foreign_keys=[magasinier_stock_id])
     annulateur       = db.relationship('User', foreign_keys=[annulateur_id])
     dernier_imprimeur = db.relationship('User', foreign_keys=[dernier_imprimeur_id])
+    validateur_fournisseur = db.relationship('User', foreign_keys=[validateur_fournisseur_id])
+    livreur_fournisseur   = db.relationship('User', foreign_keys=[livreur_fournisseur_id])
+    magasinier_reception  = db.relationship('User', foreign_keys=[magasinier_reception_id])
 
     @property
     def numero_affiche(self):
@@ -314,6 +357,21 @@ class BonDeCommande(db.Model):
             return False
         return self.delai_ecoule_heures >= 24 and bool(self.pieces_en_attente)
 
+    @property
+    def a_pieces_avec_delai(self):
+        """Vrai si au moins une pièce a un délai de livraison fixé par le fournisseur."""
+        return any(l.a_delai for l in self.lignes)
+
+    @property
+    def lignes_avec_delai(self):
+        """Liste des pièces ayant un délai de livraison fixé."""
+        return [l for l in self.lignes if l.a_delai]
+
+    @property
+    def a_pieces_en_retard_delai(self):
+        """Vrai si au moins une pièce a dépassé la date limite promise par le fournisseur."""
+        return any(l.est_en_retard_delai for l in self.lignes)
+
     def ensure_code_securise(self):
         if not self.code_securise:
             self.code_securise = secrets.token_urlsafe(16)
@@ -341,6 +399,12 @@ class LigneBDC(db.Model):
     date_reception   = db.Column(db.DateTime, nullable=True)
     note_reception   = db.Column(db.String(256))
 
+    # Délais promis par le fournisseur
+    delai_livraison_texte = db.Column(db.String(64), nullable=True)   # ex: "Dans 1 semaine", "Dans 2 semaines", "Dans 3 semaines", "Dans 1 mois"
+    date_livraison_prevue = db.Column(db.Date, nullable=True)        # Date d'échéance calculée ou choisie
+    date_definition_delai = db.Column(db.DateTime, nullable=True)
+    motif_delai           = db.Column(db.String(256), nullable=True)
+
     @property
     def statut_reception_label(self):
         labels = {
@@ -364,6 +428,36 @@ class LigneBDC(db.Model):
         """Nombre d'unités de cette pièce encore en attente de réception."""
         return max(0, (self.quantite or 1) - (self.quantite_recue or 0))
 
+    @property
+    def a_delai(self):
+        """Vrai si un délai a été renseigné sur cette ligne."""
+        return bool(self.date_livraison_prevue or self.delai_livraison_texte)
+
+    @property
+    def est_en_retard_delai(self):
+        """Vrai si une date limite a été fixée, dépassée, et la pièce n'est pas encore reçue."""
+        if not self.date_livraison_prevue or self.statut_reception == 'recu':
+            return False
+        from datetime import date
+        return date.today() > self.date_livraison_prevue
+
+    @property
+    def est_echeance_proche(self):
+        """Vrai si l'échéance est aujourd'hui ou dans les 48 heures (non encore reçue)."""
+        if not self.date_livraison_prevue or self.statut_reception == 'recu':
+            return False
+        from datetime import date
+        delta = (self.date_livraison_prevue - date.today()).days
+        return 0 <= delta <= 2
+
+    @property
+    def jours_restants_delai(self):
+        """Nombre de jours avant l'échéance (négatif si en retard)."""
+        if not self.date_livraison_prevue:
+            return None
+        from datetime import date
+        return (self.date_livraison_prevue - date.today()).days
+
 
 # ─────────────────────────────────────────
 # HISTORIQUE / JOURNAL D'AUDIT
@@ -385,6 +479,10 @@ class HistoriqueAction(db.Model):
             'creation':                  'Création',
             'validation_dt':             'Validation DT',
             'refus_validation':          'Refus DT',
+            'validation_fournisseur':    'Validation Bon par Fournisseur',
+            'delai_fournisseur':         'Délai de livraison fixé par Fournisseur',
+            'livraison_fournisseur':     'Livraison déclarée par Fournisseur',
+            'reception_magasinier':      'Réception certifiée par Magasinier (DT)',
             'livraison':                 'Livrée (fournisseur)',
             'mise_en_stock':             'Mise en stock',
             'recuperation_transporteur': 'Récupérée par le transporteur',
@@ -404,6 +502,10 @@ class HistoriqueAction(db.Model):
             'creation':                  'bi-plus-circle-fill text-primary',
             'validation_dt':             'bi-check-circle-fill text-success',
             'refus_validation':          'bi-x-circle-fill text-danger',
+            'validation_fournisseur':    'bi-patch-check-fill text-warning',
+            'delai_fournisseur':         'bi-clock-history text-danger',
+            'livraison_fournisseur':     'bi-truck-flatbed text-info',
+            'reception_magasinier':      'bi-shield-check text-success',
             'livraison':                 'bi-box-seam-fill text-info',
             'mise_en_stock':             'bi-archive-fill text-success',
             'recuperation_transporteur': 'bi-truck text-purple',

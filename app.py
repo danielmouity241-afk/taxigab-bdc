@@ -203,11 +203,34 @@ def create_app():
 
     @app.context_processor
     def inject_globals():
+        alertes_delais_urgentes = []
+        nb_alertes_delais = 0
+        nb_pieces_sous_delai = 0
+        if current_user.is_authenticated:
+            try:
+                from datetime import date
+                today = date.today()
+                # Toutes les pièces sous délai sur des bons actifs et non encore reçues
+                lignes_delais = LigneBDC.query.join(BonDeCommande).filter(
+                    BonDeCommande.statut.notin_(['annulee', 'cloturee']),
+                    LigneBDC.statut_reception != 'recu',
+                    or_(LigneBDC.date_livraison_prevue != None, LigneBDC.delai_livraison_texte != None)
+                ).all()
+                nb_pieces_sous_delai = len(lignes_delais)
+                # Urgentes = date limite arrivée (aujourd'hui) ou dépassée (en retard)
+                alertes_delais_urgentes = [l for l in lignes_delais if l.date_livraison_prevue and l.date_livraison_prevue <= today]
+                nb_alertes_delais = len(alertes_delais_urgentes)
+            except Exception:
+                pass
+
         return {
             'STATUTS_BDC': STATUTS_BDC,
             'STATUTS_COULEURS': STATUTS_COULEURS,
             'now': datetime.now(),
             'company_name': Config.COMPANY_NAME,
+            'alertes_delais_urgentes': alertes_delais_urgentes,
+            'nb_alertes_delais': nb_alertes_delais,
+            'nb_pieces_sous_delai': nb_pieces_sous_delai,
         }
 
     # ─── CONTRÔLE DE SANTÉ & ANTI-VEILLE CLOUD (KEEP-ALIVE) ───────────────
@@ -289,11 +312,20 @@ def create_app():
         bons_en_cours = BonDeCommande.query.filter(BonDeCommande.statut.in_(['validee', 'livree', 'en_stock', 'recuperee_transporteur'])).all()
         alertes_relance_24h = [b for b in bons_en_cours if b.est_en_retard_24h]
 
+        # Alertes Délais Fournisseur (pièces promises dont l'échéance est arrivée ou dépassée)
+        alertes_delais_fournisseur = LigneBDC.query.join(BonDeCommande).filter(
+            BonDeCommande.statut.notin_(['annulee', 'cloturee']),
+            LigneBDC.statut_reception != 'recu',
+            LigneBDC.date_livraison_prevue != None,
+            LigneBDC.date_livraison_prevue <= today
+        ).all()
+
         return render_template('dashboard.html',
                                stats=stats,
                                recents=recents,
                                alertes_validation=alertes_validation,
-                               alertes_relance_24h=alertes_relance_24h)
+                               alertes_relance_24h=alertes_relance_24h,
+                               alertes_delais_fournisseur=alertes_delais_fournisseur)
 
     # ─── LISTE DES BDC ────────────────────────────────────────────────────
     @app.route('/bdc')
@@ -990,6 +1022,256 @@ def create_app():
         flash(msg, 'success')
         return redirect(url_for('bdc_view', id=id))
 
+    # ─── VALIDATION DU BON PAR LE FOURNISSEUR ─────────────────────────────
+    @app.route('/bdc/<int:id>/valider_fournisseur', methods=['POST'])
+    @login_required
+    def bdc_valider_fournisseur(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        if not current_user.can_valider_fournisseur:
+            flash("Action réservée au compte Fournisseur ou à la Direction Technique.", "danger")
+            return redirect(url_for('bdc_view', id=id))
+
+        bdc.fournisseur_a_valide = True
+        bdc.date_validation_fournisseur = datetime.now()
+        bdc.validateur_fournisseur_id = current_user.id
+        enregistrer_action(bdc, 'validation_fournisseur',
+                            details=f"Bon validé et pris en charge par le fournisseur ({current_user.nom_complet})")
+        db.session.commit()
+        flash(f"Le bon N°{bdc.numero_affiche} a été validé et pris en charge avec succès par le fournisseur.", "success")
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── FIXER UN DÉLAI DE LIVRAISON SUR UNE PIÈCE (FOURNISSEUR) ──────────
+    @app.route('/bdc/<int:id>/definir_delai_piece', methods=['POST'])
+    @login_required
+    def bdc_definir_delai_piece(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        if not current_user.can_valider_fournisseur:
+            flash("Action réservée au compte Fournisseur ou à la Direction Technique.", "danger")
+            return redirect(url_for('bdc_view', id=id))
+
+        ligne_id = request.form.get('ligne_id')
+        ligne = db.session.get(LigneBDC, int(ligne_id)) if ligne_id else None
+        if not ligne or ligne.bdc_id != bdc.id:
+            abort(400)
+
+        delai_choix = request.form.get('delai_choix', '').strip()
+        date_personnalisee_str = request.form.get('date_personnalisee', '').strip()
+        motif = request.form.get('motif_delai', '').strip()
+
+        from datetime import date, timedelta
+        today = date.today()
+
+        if delai_choix == '1_semaine':
+            ligne.delai_livraison_texte = "Dans 1 semaine"
+            ligne.date_livraison_prevue = today + timedelta(days=7)
+        elif delai_choix == '2_semaines':
+            ligne.delai_livraison_texte = "Dans 2 semaines"
+            ligne.date_livraison_prevue = today + timedelta(days=14)
+        elif delai_choix == '3_semaines':
+            ligne.delai_livraison_texte = "Dans 3 semaines"
+            ligne.date_livraison_prevue = today + timedelta(days=21)
+        elif delai_choix == '1_mois':
+            ligne.delai_livraison_texte = "Dans 1 mois"
+            ligne.date_livraison_prevue = today + timedelta(days=30)
+        elif delai_choix == 'personnalise':
+            if date_personnalisee_str:
+                try:
+                    d_obj = datetime.strptime(date_personnalisee_str, '%Y-%m-%d').date()
+                    ligne.date_livraison_prevue = d_obj
+                    diff_j = (d_obj - today).days
+                    if diff_j < 0:
+                        ligne.delai_livraison_texte = f"Date dépassée ({d_obj.strftime('%d/%m/%Y')})"
+                    elif diff_j == 0:
+                        ligne.delai_livraison_texte = "Aujourd'hui"
+                    elif diff_j == 1:
+                        ligne.delai_livraison_texte = "Demain"
+                    elif diff_j < 7:
+                        ligne.delai_livraison_texte = f"Dans {diff_j} jours"
+                    elif diff_j < 14:
+                        ligne.delai_livraison_texte = "Dans ~1 semaine"
+                    elif diff_j < 21:
+                        ligne.delai_livraison_texte = "Dans ~2 semaines"
+                    elif diff_j < 31:
+                        ligne.delai_livraison_texte = "Dans ~1 mois"
+                    else:
+                        ligne.delai_livraison_texte = f"Prévu le {d_obj.strftime('%d/%m/%Y')}"
+                except ValueError:
+                    flash("Format de date invalide.", "danger")
+                    return redirect(url_for('bdc_view', id=id))
+            else:
+                flash("Veuillez sélectionner une date limite.", "warning")
+                return redirect(url_for('bdc_view', id=id))
+        elif delai_choix == 'annuler_delai':
+            ligne.delai_livraison_texte = None
+            ligne.date_livraison_prevue = None
+            ligne.motif_delai = None
+            enregistrer_action(bdc, 'delai_fournisseur',
+                                details=f"Délai annulé pour la pièce '{ligne.designation}' (disponible immédiatement)")
+            db.session.commit()
+            flash(f"Délai retiré pour la pièce « {ligne.designation} ».", "info")
+            return redirect(url_for('bdc_view', id=id))
+        else:
+            flash("Option de délai non reconnue.", "warning")
+            return redirect(url_for('bdc_view', id=id))
+
+        ligne.date_definition_delai = datetime.now()
+        ligne.motif_delai = motif or None
+
+        date_fr = ligne.date_livraison_prevue.strftime('%d/%m/%Y') if ligne.date_livraison_prevue else ''
+        motif_txt = f" (Motif: {motif})" if motif else ""
+        enregistrer_action(bdc, 'delai_fournisseur',
+                            details=f"Délai fixé pour '{ligne.designation}' → {ligne.delai_livraison_texte} ({date_fr}){motif_txt} par {current_user.nom_complet}")
+        db.session.commit()
+        flash(f"Délai enregistré pour « {ligne.designation} » : {ligne.delai_livraison_texte} (échéance le {date_fr}).", "success")
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── LIVRAISON DÉCLARÉE PAR LE FOURNISSEUR ─────────────────────────────
+    @app.route('/bdc/<int:id>/livrer_fournisseur', methods=['POST'])
+    @login_required
+    def bdc_livrer_fournisseur(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        if not current_user.can_valider_fournisseur:
+            flash("Action réservée au compte Fournisseur ou à la Direction Technique.", "danger")
+            return redirect(url_for('bdc_view', id=id))
+
+        note = request.form.get('note_livraison', '').strip()
+        bdc.fournisseur_a_livre = True
+        bdc.date_livraison_fournisseur = datetime.now()
+        bdc.livreur_fournisseur_id = current_user.id
+        bdc.note_livraison_fournisseur = note or None
+
+        ancien = bdc.statut
+        if bdc.statut == 'validee':
+            bdc.statut = 'livree'
+            bdc.date_livraison = datetime.now()
+            bdc.receptionniste_id = current_user.id
+
+        enregistrer_action(bdc, 'livraison_fournisseur',
+                            ancien_statut=ancien,
+                            nouveau_statut=bdc.statut,
+                            details=f"Livraison déclarée par le Fournisseur ({current_user.nom_complet}). Note: {note or 'Aucune'}")
+        db.session.commit()
+        flash(f"La livraison du bon N°{bdc.numero_affiche} a été déclarée par le fournisseur. Le magasinier peut certifier la réception physique à la DT.", "success")
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── CERTIFICATION DE RÉCEPTION PHYSIQUE PAR LE MAGASINIER (DT) ────────
+    @app.route('/bdc/<int:id>/confirmer_reception_magasinier', methods=['POST'])
+    @login_required
+    def bdc_confirmer_reception_magasinier(id):
+        bdc = db.session.get(BonDeCommande, id)
+        if not bdc:
+            abort(404)
+        if not peut_gerer_stock(current_user):
+            flash("Action réservée au Magasinier ou à la Direction Technique.", "danger")
+            return redirect(url_for('bdc_view', id=id))
+
+        note = request.form.get('note_reception', '').strip()
+        marquer_pieces_recues = request.form.get('marquer_pieces_recues') == 'on'
+
+        bdc.reception_magasinier_validee = True
+        bdc.date_reception_magasinier = datetime.now()
+        bdc.magasinier_reception_id = current_user.id
+        bdc.note_reception_magasinier = note or None
+
+        ancien = bdc.statut
+        bdc.statut = 'en_stock'
+        bdc.date_en_stock = datetime.now()
+        bdc.magasinier_stock_id = current_user.id
+
+        if marquer_pieces_recues:
+            for l in bdc.lignes:
+                if l.statut_reception != 'recu':
+                    l.statut_reception = 'recu'
+                    l.quantite_recue = l.quantite
+                    l.date_reception = datetime.now()
+                    if not l.livreur_nom:
+                        l.livreur_nom = bdc.fournisseur or 'Fournisseur'
+
+        enregistrer_action(bdc, 'reception_magasinier',
+                            ancien_statut=ancien,
+                            nouveau_statut='en_stock',
+                            details=f"Réception physique certifiée conforme au magasin DT par le Magasinier ({current_user.nom_complet}). Remarque: {note or 'Conforme'}")
+        db.session.commit()
+        flash(f"Réception physique du bon N°{bdc.numero_affiche} certifiée avec succès au magasin DT.", "success")
+        return redirect(url_for('bdc_view', id=id))
+
+    # ─── ESPACE DÉDIÉ : SUIVI DES DÉLAIS FOURNISSEUR & STOCKAGE DES PIÈCES EN ATTENTE ───
+    @app.route('/bdc/delais')
+    @login_required
+    def bdc_delais():
+        from datetime import date, timedelta
+        today = date.today()
+
+        filtre = request.args.get('filtre', 'tous')  # 'retard', 'proche', 'a_venir', 'traites', 'tous'
+        f_fournisseur = request.args.get('fournisseur', '').strip()
+        f_recherche = request.args.get('q', '').strip()
+
+        # Requête de base sur toutes les lignes avec délai
+        q = LigneBDC.query.join(BonDeCommande).filter(
+            BonDeCommande.statut != 'annulee',
+            or_(LigneBDC.date_livraison_prevue != None, LigneBDC.delai_livraison_texte != None)
+        )
+
+        if f_fournisseur:
+            q = q.filter(BonDeCommande.fournisseur.ilike(f'%{f_fournisseur}%'))
+        if f_recherche:
+            q = q.filter(or_(
+                LigneBDC.designation.ilike(f'%{f_recherche}%'),
+                BonDeCommande.vehicule_nom.ilike(f'%{f_recherche}%'),
+                BonDeCommande.transporteur.ilike(f'%{f_recherche}%')
+            ))
+
+        toutes_lignes = q.order_by(LigneBDC.date_livraison_prevue.asc().nullslast(), LigneBDC.date_definition_delai.desc()).all()
+
+        # Calcul des KPI
+        pieces_en_retard = [l for l in toutes_lignes if l.statut_reception != 'recu' and l.date_livraison_prevue and l.date_livraison_prevue < today]
+        pieces_aujourdhui = [l for l in toutes_lignes if l.statut_reception != 'recu' and l.date_livraison_prevue == today]
+        pieces_proches = [l for l in toutes_lignes if l.statut_reception != 'recu' and l.date_livraison_prevue and 0 < (l.date_livraison_prevue - today).days <= 2]
+        pieces_a_venir = [l for l in toutes_lignes if l.statut_reception != 'recu' and l.date_livraison_prevue and (l.date_livraison_prevue - today).days > 2]
+        pieces_sans_date = [l for l in toutes_lignes if l.statut_reception != 'recu' and not l.date_livraison_prevue]
+        pieces_honorees = [l for l in toutes_lignes if l.statut_reception == 'recu']
+
+        nb_alertes = len(pieces_en_retard) + len(pieces_aujourdhui)
+
+        # Filtrage selon l'onglet actif
+        if filtre == 'retard':
+            lignes_affichees = pieces_en_retard + pieces_aujourdhui
+        elif filtre == 'proche':
+            lignes_affichees = pieces_proches
+        elif filtre == 'a_venir':
+            lignes_affichees = pieces_a_venir + pieces_sans_date
+        elif filtre == 'traites':
+            lignes_affichees = pieces_honorees
+        elif filtre == 'en_cours':
+            lignes_affichees = [l for l in toutes_lignes if l.statut_reception != 'recu']
+        else:
+            # 'tous'
+            lignes_affichees = toutes_lignes
+
+        # Liste des fournisseurs pour le filtre
+        fournisseurs_liste = sorted(list({l.bon.fournisseur for l in toutes_lignes if l.bon and l.bon.fournisseur}))
+
+        return render_template('bdc/delais.html',
+                               lignes=lignes_affichees,
+                               toutes_lignes_count=len(toutes_lignes),
+                               pieces_en_retard_count=len(pieces_en_retard),
+                               pieces_aujourdhui_count=len(pieces_aujourdhui),
+                               pieces_proches_count=len(pieces_proches),
+                               pieces_a_venir_count=len(pieces_a_venir) + len(pieces_sans_date),
+                               pieces_honorees_count=len(pieces_honorees),
+                               nb_alertes=nb_alertes,
+                               filtre=filtre,
+                               f_fournisseur=f_fournisseur,
+                               f_recherche=f_recherche,
+                               fournisseurs_liste=fournisseurs_liste,
+                               today=today)
+
     # ─── PDF ──────────────────────────────────────────────────────────────
     @app.route('/bdc/<int:id>/pdf')
     @login_required
@@ -1481,6 +1763,7 @@ def create_app():
                 u.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
                 u.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
                 u.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
+                u.peut_valider_fournisseur = request.form.get('peut_valider_fournisseur') == 'on'
                 db.session.add(u)
                 db.session.commit()
                 flash(f'Utilisateur {nom_complet} ({role}) créé avec succès.', 'success')
@@ -1509,6 +1792,7 @@ def create_app():
             user.peut_gerer_utilisateurs = request.form.get('peut_gerer_utilisateurs') == 'on'
             user.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
             user.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
+            user.peut_valider_fournisseur = request.form.get('peut_valider_fournisseur') == 'on'
             new_pw = request.form.get('password', '').strip()
             if new_pw:
                 user.set_password(new_pw)
@@ -1539,6 +1823,9 @@ def create_app():
         BonDeCommande.query.filter_by(receptionniste_id=user.id).update({'receptionniste_id': None})
         BonDeCommande.query.filter_by(magasinier_stock_id=user.id).update({'magasinier_stock_id': None})
         BonDeCommande.query.filter_by(annulateur_id=user.id).update({'annulateur_id': None})
+        BonDeCommande.query.filter_by(validateur_fournisseur_id=user.id).update({'validateur_fournisseur_id': None})
+        BonDeCommande.query.filter_by(livreur_fournisseur_id=user.id).update({'livreur_fournisseur_id': None})
+        BonDeCommande.query.filter_by(magasinier_reception_id=user.id).update({'magasinier_reception_id': None})
         HistoriqueAction.query.filter_by(user_id=user.id).update({'user_id': None})
 
         # Suppression définitive
@@ -1651,6 +1938,7 @@ def create_app():
                 ("peut_voir_historique", "BOOLEAN DEFAULT FALSE"),
                 ("peut_voir_archives", "BOOLEAN DEFAULT FALSE"),
                 ("est_spectateur", "BOOLEAN DEFAULT FALSE"),
+                ("peut_valider_fournisseur", "BOOLEAN DEFAULT FALSE"),
                 ("mot_de_passe_clair", "VARCHAR(128)"),
             ]
             for col_nom, col_type in colonnes_permissions:
@@ -1672,10 +1960,35 @@ def create_app():
                 ("date_derniere_impression", "TIMESTAMP"),
                 ("dernier_imprimeur_id", "INTEGER"),
                 ("dossier_assurance", "VARCHAR(128)"),
+                ("fournisseur_a_valide", "BOOLEAN DEFAULT FALSE"),
+                ("date_validation_fournisseur", "TIMESTAMP"),
+                ("validateur_fournisseur_id", "INTEGER"),
+                ("fournisseur_a_livre", "BOOLEAN DEFAULT FALSE"),
+                ("date_livraison_fournisseur", "TIMESTAMP"),
+                ("livreur_fournisseur_id", "INTEGER"),
+                ("note_livraison_fournisseur", "VARCHAR(256)"),
+                ("reception_magasinier_validee", "BOOLEAN DEFAULT FALSE"),
+                ("date_reception_magasinier", "TIMESTAMP"),
+                ("magasinier_reception_id", "INTEGER"),
+                ("note_reception_magasinier", "TEXT"),
             ]
             for col_nom, col_type in colonnes_bdc:
                 try:
                     db.session.execute(text(f"ALTER TABLE bons_de_commande ADD COLUMN {col_nom} {col_type}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+            # Migration automatique des colonnes Lignes BDC (Délais fournisseur)
+            colonnes_lignes = [
+                ("delai_livraison_texte", "VARCHAR(64)"),
+                ("date_livraison_prevue", "DATE"),
+                ("date_definition_delai", "TIMESTAMP"),
+                ("motif_delai", "VARCHAR(256)"),
+            ]
+            for col_nom, col_type in colonnes_lignes:
+                try:
+                    db.session.execute(text(f"ALTER TABLE lignes_bdc ADD COLUMN {col_nom} {col_type}"))
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
@@ -1730,6 +2043,7 @@ def create_app():
                 {'username': 'dt',          'password': 'DT@2026!',     'nom': 'Directeur Technique',         'role': 'Directeur Technique',        'admin': True},
                 {'username': 'dta',         'password': 'DTA@2026!',    'nom': 'Directeur Technique Adjoint', 'role': 'Directeur Technique Adjoint', 'dta': True},
                 {'username': 'magasinier',  'password': 'Mag@2026!',    'nom': 'Magasinier Principal',        'role': 'Magasinier',                 'mag': True},
+                {'username': 'fournisseur', 'password': 'Fournisseur@2026!', 'nom': 'Fournisseur Partenaire',   'role': 'Fournisseur',                'fournisseur': True},
                 {'username': 'transporteur','password': 'Trans@2026!',  'nom': 'Transporteur',                'role': 'Transporteur',               'trans': True},
             ]
             for u_data in default_users:
@@ -1754,6 +2068,7 @@ def create_app():
                     u.peut_cloturer = True
                     u.peut_annuler = True
                     u.peut_recuperer = True
+                    u.peut_valider_fournisseur = True
                 elif u_data.get('dta'):
                     u.peut_creer_bdc = True
                     u.peut_annuler = True
@@ -1762,6 +2077,8 @@ def create_app():
                 elif u_data.get('mag'):
                     u.peut_creer_bdc = True
                     u.peut_gerer_stock = True
+                elif u_data.get('fournisseur'):
+                    u.peut_valider_fournisseur = True
                 elif u_data.get('trans'):
                     u.peut_recuperer = True
 

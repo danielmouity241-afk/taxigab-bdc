@@ -111,6 +111,12 @@
                 <small class="text-muted d-block mt-1">Habilité uniquement à enregistrer la remise/récupération des pièces.</small>
               </button>
             </div>
+            <div class="col-md-12 col-sm-12">
+              <button type="button" class="btn btn-outline-warning w-100 text-start p-3 h-100 shadow-xs" onclick="appliquerProfil('fournisseur')">
+                <div class="fw-bold text-dark"><i class="bi bi-shop text-warning me-2 fs-5"></i>Fournisseur (Partenaire)</div>
+                <small class="text-muted d-block mt-1">Validation des bons, fixation des délais par pièce et déclaration de livraison.</small>
+              </button>
+            </div>
           </div>
 
           <!-- Section avancée / permissions détaillées (Repliable) -->
@@ -189,6 +195,13 @@
                       <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_voir_archives" id="perm-arch"
                              {% if user and (user.peut_voir_archives or user.role in ['DT', 'DTA']) and not user.est_spectateur %}checked{% endif %}>
                       <label class="form-check-label fw-semibold small" for="perm-arch">Accès Archives Mensuelles</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="form-check form-switch p-2 bg-white rounded border border-warning-subtle">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_valider_fournisseur" id="perm-fournisseur"
+                             {% if user and (user.peut_valider_fournisseur or user.role in ['fournisseur', 'Fournisseur']) and not user.est_spectateur %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-dark small" for="perm-fournisseur">Validation des bons & Fixation des délais (Compte Fournisseur)</label>
                     </div>
                   </div>
                   <div class="col-12">
@@ -338,6 +351,21 @@ function appliquerProfil(type) {
     if (hist) hist.checked = false;
     if (arch) arch.checked = false;
     if (!roleInput.value) roleInput.value = 'Transporteur / Chauffeur';
+  } else if (type === 'fournisseur') {
+    spectateur.checked = false;
+    toggleSpectateur(false);
+    creer.checked = false;
+    valider.checked = false;
+    stock.checked = false;
+    recup.checked = false;
+    cloturer.checked = false;
+    annuler.checked = false;
+    admin.checked = false;
+    if (hist) hist.checked = false;
+    if (arch) arch.checked = false;
+    const fourn = document.getElementById('perm-fournisseur');
+    if (fourn) fourn.checked = true;
+    roleInput.value = 'Fournisseur';
   }
 }
 

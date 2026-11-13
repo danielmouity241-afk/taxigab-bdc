@@ -69,6 +69,19 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'bdc_delais' %}active{% endif %} d-flex align-items-center justify-content-between"
+           href="{{ url_for('bdc_delais') }}">
+          <div>
+            <i class="bi bi-hourglass-split me-2 text-warning"></i> Délais Pièces
+          </div>
+          {% if nb_alertes_delais and nb_alertes_delais > 0 %}
+            <span class="badge bg-danger rounded-pill shadow-xs">{{ nb_alertes_delais }}</span>
+          {% elif nb_pieces_sous_delai and nb_pieces_sous_delai > 0 %}
+            <span class="badge bg-warning text-dark rounded-pill">{{ nb_pieces_sous_delai }}</span>
+          {% endif %}
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'fournisseurs' %}active{% endif %}"
            href="{{ url_for('fournisseurs') }}">
           <i class="bi bi-person-lines-fill me-2 text-success"></i> Répertoire Fournisseurs
@@ -142,6 +155,24 @@
         {{ now.strftime('%d/%m/%Y %H:%M') }}
       </div>
     </div>
+
+    <!-- Alerte Globale Système : Délais Fournisseur Échus / En retard -->
+    {% if nb_alertes_delais and nb_alertes_delais > 0 %}
+    <div class="px-4 pt-3 pb-0">
+      <div class="alert alert-danger border-2 border-danger shadow-sm d-flex align-items-center justify-content-between mb-0" role="alert">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-exclamation-octagon-fill fs-3 text-danger me-3"></i>
+          <div>
+            <strong class="text-danger d-block fs-6">⚠️ ALERTE DÉLAI FOURNISSEUR : {{ nb_alertes_delais }} pièce(s) ont atteint ou dépassé la date de livraison promise !</strong>
+            <span class="small text-muted">Ces pièces sont attendues à la Direction Technique. Le fournisseur et le magasinier doivent régulariser la livraison ou actualiser les délais.</span>
+          </div>
+        </div>
+        <a href="{{ url_for('bdc_delais', filtre='retard') }}" class="btn btn-danger btn-sm text-nowrap ms-3 fw-bold">
+          <i class="bi bi-arrow-right-circle me-1"></i>Voir les alertes
+        </a>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Alertes flash -->
     <div class="px-4 pt-2">
