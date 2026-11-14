@@ -411,7 +411,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
             if getattr(ligne, 'delai_livraison_texte', None) or getattr(ligne, 'date_livraison_prevue', None):
                 date_p_str = f" ({ligne.date_livraison_prevue.strftime('%d/%m/%Y')})" if getattr(ligne, 'date_livraison_prevue', None) else ""
                 motif_p = f" [{ligne.motif_delai}]" if getattr(ligne, 'motif_delai', None) else ""
-                etat_str += f"<br/><font color='#b45309'><b>⏳ Délai: {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
+                etat_str += f"<br/><font color='#b45309'><b>Délai promis : {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
 
             row = [
                 Paragraph(str(i), S['value']),
@@ -436,7 +436,7 @@ def generate_bdc_pdf(bdc, config, avec_reception=False):
             if getattr(ligne, 'delai_livraison_texte', None) or getattr(ligne, 'date_livraison_prevue', None):
                 date_p_str = f" (prévu le {ligne.date_livraison_prevue.strftime('%d/%m/%Y')})" if getattr(ligne, 'date_livraison_prevue', None) else ""
                 motif_p = f" [{ligne.motif_delai}]" if getattr(ligne, 'motif_delai', None) else ""
-                delai_mention = f"<font color='#b45309'><b>⏳ Délai promis : {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
+                delai_mention = f"<font color='#b45309'><b>Délai promis : {ligne.delai_livraison_texte or ''}{date_p_str}{motif_p}</b></font>"
                 obs_content = f"{obs_content}<br/>{delai_mention}" if obs_content else delai_mention
 
             row = [

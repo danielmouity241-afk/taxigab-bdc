@@ -37,6 +37,10 @@
         <select name="relance" class="form-select form-select-sm">
           <option value="">Tous les délais</option>
           <option value="retard_24h" {% if filtres.relance == 'retard_24h' %}selected{% endif %}>⚠️ Retard > 24h (À relancer)</option>
+          <option value="retard_delai" {% if filtres.relance == 'retard_delai' %}selected{% endif %}>🚨 Délai Fournisseur dépassé</option>
+          <option value="avec_delai" {% if filtres.relance == 'avec_delai' %}selected{% endif %}>⏱️ Sous délai promis</option>
+          <option value="attente_fournisseur" {% if filtres.relance == 'attente_fournisseur' %}selected{% endif %}>⏳ En attente Fournisseur</option>
+          <option value="attente_reception_mag" {% if filtres.relance == 'attente_reception_mag' %}selected{% endif %}>📦 Livré, attente Réception DT</option>
           <option value="relance_faite" {% if filtres.relance == 'relance_faite' %}selected{% endif %}>Déjà relancés</option>
         </select>
       </div>
@@ -134,8 +138,22 @@
       {% if bdc.est_en_retard_24h %}
       <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>> 24h ({{ bdc.delai_ecoule_heures }}h)</span>
       {% endif %}
+      {% if bdc.fournisseur_a_valide %}
+      <span class="badge bg-warning text-dark"><i class="bi bi-patch-check-fill me-1"></i>Validé Fournisseur</span>
+      {% endif %}
+      {% if bdc.fournisseur_a_livre %}
+      <span class="badge bg-info text-dark"><i class="bi bi-truck-flatbed me-1"></i>Fournisseur a livré</span>
+      {% endif %}
+      {% if bdc.reception_magasinier_validee %}
+      <span class="badge bg-success"><i class="bi bi-shield-check me-1"></i>Réception DT validée</span>
+      {% endif %}
+      {% if bdc.a_pieces_en_retard_delai %}
+      <span class="badge bg-danger animate__animated animate__pulse animate__infinite"><i class="bi bi-alarm-fill me-1"></i>Délai dépassé</span>
+      {% elif bdc.a_pieces_avec_delai %}
+      <span class="badge bg-warning-soft text-dark border border-warning"><i class="bi bi-hourglass-split me-1"></i>Délai promis</span>
+      {% endif %}
       {% if bdc.nb_relances_whatsapp and bdc.nb_relances_whatsapp > 0 %}
-      <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat me-1"></i>{{ bdc.nb_relances_whatsapp }} relance(s)</span>
+      <span class="badge bg-dark"><i class="bi bi-arrow-repeat me-1"></i>{{ bdc.nb_relances_whatsapp }} relance(s)</span>
       {% endif %}
     </div>
     <div class="text-muted small">
@@ -163,7 +181,29 @@
           {% for ligne in bdc.lignes %}
           <tr class="{% if ligne.statut_reception == 'non_recu' %}table-danger-soft{% elif ligne.statut_reception == 'recu' %}table-success-soft{% elif ligne.statut_reception == 'partiel' %}table-warning-soft{% endif %}">
             <td class="text-center align-middle">{{ loop.index }}</td>
-            <td class="align-middle fw-semibold">{{ ligne.designation }}</td>
+            <td class="align-middle fw-semibold">
+              {{ ligne.designation }}
+              {% if ligne.a_delai %}
+              <div class="mt-1">
+                {% if ligne.est_en_retard_delai %}
+                <span class="badge bg-danger small py-1 px-2">
+                  <i class="bi bi-clock-history me-1"></i>Retard : Échéance dépassée ({{ ligne.date_livraison_prevue.strftime('%d/%m/%Y') }})
+                </span>
+                {% elif ligne.est_echeance_proche %}
+                <span class="badge bg-warning text-dark small py-1 px-2">
+                  <i class="bi bi-hourglass-split me-1"></i>Échéance proche : {{ ligne.delai_livraison_texte }} ({{ ligne.date_livraison_prevue.strftime('%d/%m/%Y') }})
+                </span>
+                {% else %}
+                <span class="badge bg-light text-dark border small py-1 px-2">
+                  <i class="bi bi-calendar-event text-primary me-1"></i>Délai : {{ ligne.delai_livraison_texte }}{% if ligne.date_livraison_prevue %} ({{ ligne.date_livraison_prevue.strftime('%d/%m/%Y') }}){% endif %}
+                </span>
+                {% endif %}
+                {% if ligne.motif_delai %}
+                <span class="text-muted small fst-italic ms-1">({{ ligne.motif_delai }})</span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </td>
             <td class="text-center align-middle">{{ ligne.quantite }}</td>
             <td class="text-center align-middle fw-bold">
               {% if ligne.quantite_recue %}{{ ligne.quantite_recue }}{% else %}0{% endif %}

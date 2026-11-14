@@ -183,7 +183,16 @@ def create_app():
 
         pieces_manquantes_txt = ""
         for p in getattr(bdc, 'pieces_en_attente', []):
-            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}\n"
+            delai_info = ""
+            if getattr(p, 'a_delai', False):
+                if getattr(p, 'est_en_retard_delai', False):
+                    date_ech = p.date_livraison_prevue.strftime('%d/%m/%Y') if p.date_livraison_prevue else ''
+                    delai_info = f" ⚠️ [DÉLAI DÉPASSÉ - Échéance : {date_ech}]"
+                elif getattr(p, 'date_livraison_prevue', None):
+                    delai_info = f" [Délai convenu : {p.delai_livraison_texte or ''} ({p.date_livraison_prevue.strftime('%d/%m/%Y')})]"
+                elif getattr(p, 'delai_livraison_texte', None):
+                    delai_info = f" [Délai convenu : {p.delai_livraison_texte}]"
+            pieces_manquantes_txt += f"• {p.quantite_restante}x {p.designation}{delai_info}\n"
 
         if not pieces_manquantes_txt.strip():
             pieces_manquantes_txt = "• (Toutes les pièces de la commande)\n"
@@ -1710,6 +1719,14 @@ def create_app():
 
         if f_relance == 'retard_24h':
             bons = [b for b in bons if b.est_en_retard_24h]
+        elif f_relance == 'retard_delai':
+            bons = [b for b in bons if getattr(b, 'a_pieces_en_retard_delai', False)]
+        elif f_relance == 'avec_delai':
+            bons = [b for b in bons if getattr(b, 'a_pieces_avec_delai', False)]
+        elif f_relance == 'attente_fournisseur':
+            bons = [b for b in bons if not getattr(b, 'fournisseur_a_valide', False)]
+        elif f_relance == 'attente_reception_mag':
+            bons = [b for b in bons if getattr(b, 'fournisseur_a_livre', False) and not getattr(b, 'reception_magasinier_validee', False)]
         elif f_relance == 'relance_faite':
             bons = [b for b in bons if (b.nb_relances_whatsapp or 0) > 0]
 
