@@ -650,7 +650,20 @@
               <span class="badge bg-danger">{{ bdc.delai_ecoule_heures }}h d'attente</span>
             </div>
             <div class="mt-1">
-              Validé depuis <strong>{{ bdc.delai_ecoule_heures }}h</strong> avec <strong>{{ bdc.total_pieces_en_attente }} pièce(s)</strong> toujours en attente de livraison.
+              Validé depuis <strong>{{ bdc.delai_ecoule_heures }}h</strong> avec <strong>{{ bdc.total_pieces_en_attente }} pièce(s)</strong> toujours en attente de livraison sans promesse de délai.
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Information Promesse d'attente fournisseur -->
+          {% if bdc.est_sous_promesse_attente %}
+          <div class="alert alert-info border-info p-2 mb-2 small shadow-xs">
+            <div class="fw-bold d-flex align-items-center justify-content-between">
+              <span><i class="bi bi-hourglass-split text-primary me-1"></i>Classé sous promesse d'attente</span>
+              <span class="badge bg-primary-soft text-primary border border-primary">Délai convenu</span>
+            </div>
+            <div class="mt-1 text-dark">
+              Des délais de livraison ont été convenus avec le fournisseur (1 sem, 2 sem, 3 sem ou 1 mois). Cette commande est retirée du tableau de bord des retards et suivie dans l'<a href="{{ url_for('bdc_delais') }}" class="alert-link fw-semibold">Espace Délais</a>.
             </div>
           </div>
           {% endif %}

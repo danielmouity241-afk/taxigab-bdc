@@ -317,9 +317,10 @@ def create_app():
         if peut_valider_dt(current_user):
             alertes_validation = BonDeCommande.query.filter_by(statut='en_attente').all()
 
-        # Alertes Relances Fournisseurs (+24h sans réception complète)
+        # Alertes Relances Fournisseurs (+24h sans réception complète ET sans promesse de délai convenu)
         bons_en_cours = BonDeCommande.query.filter(BonDeCommande.statut.in_(['validee', 'livree', 'en_stock', 'recuperee_transporteur'])).all()
         alertes_relance_24h = [b for b in bons_en_cours if b.est_en_retard_24h]
+        bons_sous_promesse_attente = [b for b in bons_en_cours if b.est_sous_promesse_attente]
 
         # Alertes Délais Fournisseur (pièces promises dont l'échéance est arrivée ou dépassée)
         alertes_delais_fournisseur = LigneBDC.query.join(BonDeCommande).filter(
@@ -334,6 +335,7 @@ def create_app():
                                recents=recents,
                                alertes_validation=alertes_validation,
                                alertes_relance_24h=alertes_relance_24h,
+                               bons_sous_promesse_attente=bons_sous_promesse_attente,
                                alertes_delais_fournisseur=alertes_delais_fournisseur)
 
     # ─── LISTE DES BDC ────────────────────────────────────────────────────

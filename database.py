@@ -349,13 +349,42 @@ class BonDeCommande(db.Model):
         return max(0, int(diff.total_seconds() // 3600))
 
     @property
+    def pieces_en_attente_sans_promesse(self):
+        """Pièces en attente qui n'ont pas de promesse de délai active."""
+        return [l for l in self.pieces_en_attente if not getattr(l, 'est_sous_delai_actif', False)]
+
+    @property
+    def est_sous_promesse_attente(self):
+        """Vrai si le bon a été classé au niveau des promesses d'attente fournisseur (1 sem, 2 sem, 3 sem, 1 mois...)
+        et qu'aucune de ses pièces n'a dépassé son échéance convenue."""
+        if not self.pieces_en_attente:
+            return False
+        if self.a_pieces_avec_delai and not self.a_pieces_en_retard_delai:
+            return True
+        return False
+
+    @property
     def est_en_retard_24h(self):
-        """Vrai si validé depuis +24h, non clôturé/annulé, et pièces toujours en attente."""
+        """Vrai si validé depuis +24h, non clôturé/annulé, pièces en attente,
+        ET NON classé sous promesse d'attente (délai fournisseur 1 sem, 2 sem, 3 sem, 1 mois...).
+        Dès qu'une promesse d'attente est enregistrée, le bon ne s'affiche plus dans les retards."""
         if self.statut in ('refusee', 'cloturee', 'annulee'):
             return False
         if self.statut not in ('validee', 'livree', 'en_stock', 'recuperee_transporteur'):
             return False
-        return self.delai_ecoule_heures >= 24 and bool(self.pieces_en_attente)
+        if not self.pieces_en_attente:
+            return False
+
+        # Si le bon est classé avec des promesses d'attente (1 sem, 2 sem, 3 sem, 1 mois...)
+        # et que l'échéance n'est pas encore dépassée : IL NE S'AFFICHE PLUS DANS LES RETARDS !
+        if self.est_sous_promesse_attente:
+            return False
+
+        # Si toutes les pièces en attente ont un délai convenu non échu : pas de retard
+        if not self.pieces_en_attente_sans_promesse:
+            return False
+
+        return self.delai_ecoule_heures >= 24
 
     @property
     def a_pieces_avec_delai(self):
@@ -432,6 +461,16 @@ class LigneBDC(db.Model):
     def a_delai(self):
         """Vrai si un délai a été renseigné sur cette ligne."""
         return bool(self.date_livraison_prevue or self.delai_livraison_texte)
+
+    @property
+    def est_sous_delai_actif(self):
+        """Vrai si un délai a été fixé (1 sem, 2 sem, 3 sem, 1 mois...) et que la date limite n'est pas dépassée."""
+        if not self.a_delai or self.statut_reception == 'recu':
+            return False
+        from datetime import date
+        if self.date_livraison_prevue:
+            return date.today() <= self.date_livraison_prevue
+        return True
 
     @property
     def est_en_retard_delai(self):

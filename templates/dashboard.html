@@ -21,13 +21,13 @@
 </div>
 {% endif %}
 
-<!-- ── ALERTES RELANCES FOURNISSEURS (+24H) ───────────────────────────── -->
+<!-- ── ALERTES RELANCES FOURNISSEURS (+24H SANS PROMESSE DE DÉLAI) ────── -->
 {% if alertes_relance_24h %}
 <div class="alert alert-danger border-danger d-flex align-items-start gap-3 mb-4 shadow-xs">
   <i class="bi bi-clock-history fs-4 text-danger mt-1"></i>
   <div class="w-100">
     <div class="d-flex justify-content-between align-items-center mb-1">
-      <strong><i class="bi bi-whatsapp text-success me-1"></i>{{ alertes_relance_24h|length }} commande(s) validée(s) depuis plus de 24h avec des pièces en attente :</strong>
+      <strong><i class="bi bi-whatsapp text-success me-1"></i>{{ alertes_relance_24h|length }} commande(s) validée(s) depuis plus de 24h sans promesse de délai :</strong>
       <a href="{{ url_for('suivi', relance='retard_24h') }}" class="btn btn-sm btn-danger fw-semibold">
         Consulter & Relancer
       </a>
@@ -37,10 +37,38 @@
         <a href="{{ url_for('bdc_view', id=b.id) }}" class="badge bg-white text-dark border border-danger p-2 text-decoration-none shadow-xs">
           <strong class="text-danger">{{ b.numero_affiche }}</strong> — {{ b.fournisseur or 'Fournisseur' }}
           <span class="badge bg-danger ms-1">{{ b.delai_ecoule_heures }}h</span>
-          <span class="badge bg-warning text-dark ms-1">{{ b.total_pieces_en_attente }} pcs</span>
+          <span class="badge bg-warning text-dark ms-1">{{ b.total_pieces_en_attente }} pcs sans délai</span>
           {% if b.nb_relances_whatsapp and b.nb_relances_whatsapp > 0 %}
           <span class="badge bg-dark ms-1">{{ b.nb_relances_whatsapp }} rappel(s)</span>
           {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── COMMANDES CLASSÉES SOUS PROMESSE D'ATTENTE FOURNISSEUR ─────────── -->
+{% if bons_sous_promesse_attente %}
+<div class="alert alert-info border-info d-flex align-items-start gap-3 mb-4 shadow-xs">
+  <i class="bi bi-calendar-check fs-4 text-primary mt-1"></i>
+  <div class="w-100">
+    <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-2">
+      <div>
+        <strong class="text-navy"><i class="bi bi-hourglass-split text-primary me-1"></i>{{ bons_sous_promesse_attente|length }} commande(s) classée(s) sous promesse d'attente fournisseur :</strong>
+        <span class="text-muted small ms-1">(Délais convenus de 1, 2, 3 semaines ou 1 mois — exclues des retards)</span>
+      </div>
+      <a href="{{ url_for('bdc_delais') }}" class="btn btn-sm btn-outline-primary fw-semibold">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Espace Délais
+      </a>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+      {% for b in bons_sous_promesse_attente %}
+        <a href="{{ url_for('bdc_view', id=b.id) }}" class="badge bg-white text-dark border border-primary p-2 text-decoration-none shadow-xs">
+          <strong class="text-navy">{{ b.numero_affiche }}</strong> — {{ b.fournisseur or 'Fournisseur' }}
+          <span class="badge bg-primary-soft text-primary border border-primary ms-1">
+            <i class="bi bi-clock-history me-1"></i>{{ b.lignes_avec_delai|length }} pièce(s) sous promesse
+          </span>
         </a>
       {% endfor %}
     </div>
