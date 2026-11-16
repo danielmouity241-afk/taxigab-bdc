@@ -48,6 +48,17 @@
               {% if user.role and user.role != user.profil_simple_badge.label %}
               <div class="small text-muted">{{ user.role }}</div>
               {% endif %}
+              <div class="mt-1">
+                {% if user.can_imprimer_bdc %}
+                  <span class="badge bg-light text-primary border" style="font-size: 0.68rem;" title="Autorisé à imprimer et télécharger les bons de commande">
+                    <i class="bi bi-printer-fill me-1"></i>Impression autorisée
+                  </span>
+                {% else %}
+                  <span class="badge bg-light text-muted border" style="font-size: 0.68rem;" title="Impression bloquée pour cet utilisateur">
+                    <i class="bi bi-printer-x me-1"></i>Impression bloquée
+                  </span>
+                {% endif %}
+              </div>
             </td>
             <td>
               <!-- AFFICHAGE ET GESTION DU MOT DE PASSE EN CLAIR -->

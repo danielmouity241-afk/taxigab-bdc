@@ -590,7 +590,8 @@
         </div>
         {% endif %}
 
-        <!-- Options d'impression PDF -->
+        <!-- Options d'impression PDF (selon permissions accordées) -->
+        {% if current_user.can_imprimer_bdc %}
         <div class="dropdown d-grid">
           <button class="btn btn-outline-danger dropdown-toggle fw-semibold text-start d-flex align-items-center justify-content-between"
                   type="button" data-bs-toggle="dropdown">
@@ -627,6 +628,11 @@
             </li>
           </ul>
         </div>
+        {% else %}
+        <div class="p-2 rounded bg-light border text-muted small text-center">
+          <i class="bi bi-printer-x me-1"></i> Impression PDF non autorisée sur ce compte
+        </div>
+        {% endif %}
 
         <!-- ENVOI WHATSAPP & SUIVI DES RELANCES AU FOURNISSEUR -->
         {% if bdc.statut in ['validee', 'livree', 'en_stock', 'recuperee_transporteur', 'cloturee'] %}

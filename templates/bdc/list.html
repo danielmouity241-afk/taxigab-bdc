@@ -189,10 +189,12 @@
                    class="btn btn-sm btn-outline-secondary" title="Voir">
                   <i class="bi bi-eye"></i>
                 </a>
+                {% if current_user.can_imprimer_bdc %}
                 <a href="{{ url_for('bdc_pdf', id=bdc.id) }}" target="_blank"
                    class="btn btn-sm btn-outline-primary" title="Imprimer le bon de commande">
                   <i class="bi bi-printer me-1"></i> Imprimer
                 </a>
+                {% endif %}
               </div>
             </td>
           </tr>

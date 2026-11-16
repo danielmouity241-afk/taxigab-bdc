@@ -32,6 +32,7 @@ class User(UserMixin, db.Model):
     peut_voir_archives       = db.Column(db.Boolean, default=False)  # Accès aux archives mensuelles
     est_spectateur           = db.Column(db.Boolean, default=False)  # Consultation totale et impression sans modification
     peut_valider_fournisseur = db.Column(db.Boolean, default=False)  # Validation bon & délais par le fournisseur
+    peut_imprimer_bdc        = db.Column(db.Boolean, default=False)  # Autorisation d'impression des bons (PDF)
 
     # Relations
     bons_crees    = db.relationship('BonDeCommande', foreign_keys='BonDeCommande.createur_id', backref='createur', lazy=True)
@@ -92,6 +93,16 @@ class User(UserMixin, db.Model):
             return False
         # Le fournisseur et le DT (super-admin pour test/assistance) peuvent valider côté fournisseur
         return bool(self.is_fournisseur or self.is_directeur_technique or self.role in ('DT', 'Directeur Technique'))
+
+    @property
+    def can_imprimer_bdc(self):
+        if not self.actif:
+            return False
+        # Le DT a toujours le droit d'imprimer
+        if self.role in ('DT', 'Directeur Technique') or self.is_directeur_technique:
+            return True
+        # Sinon, selon la permission cochée dans la fiche utilisateur
+        return bool(self.peut_imprimer_bdc)
 
     @property
     def can_creer_bdc(self):

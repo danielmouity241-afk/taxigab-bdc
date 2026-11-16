@@ -1287,6 +1287,10 @@ def create_app():
     @app.route('/bdc/<int:id>/pdf')
     @login_required
     def bdc_pdf(id):
+        if not getattr(current_user, 'can_imprimer_bdc', False):
+            flash("Vous n'avez pas l'autorisation d'imprimer les bons de commande. Veuillez vous rapprocher de la Direction Technique pour obtenir cette permission.", "danger")
+            return redirect(url_for('bdc_view', id=id))
+
         bdc = db.session.get(BonDeCommande, id)
         if not bdc:
             abort(404)
@@ -1783,6 +1787,7 @@ def create_app():
                 u.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
                 u.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
                 u.peut_valider_fournisseur = request.form.get('peut_valider_fournisseur') == 'on'
+                u.peut_imprimer_bdc       = request.form.get('peut_imprimer_bdc') == 'on'
                 db.session.add(u)
                 db.session.commit()
                 flash(f'Utilisateur {nom_complet} ({role}) créé avec succès.', 'success')
@@ -1812,6 +1817,7 @@ def create_app():
             user.peut_voir_historique    = request.form.get('peut_voir_historique') == 'on'
             user.peut_voir_archives      = request.form.get('peut_voir_archives') == 'on'
             user.peut_valider_fournisseur = request.form.get('peut_valider_fournisseur') == 'on'
+            user.peut_imprimer_bdc       = request.form.get('peut_imprimer_bdc') == 'on'
             new_pw = request.form.get('password', '').strip()
             if new_pw:
                 user.set_password(new_pw)
@@ -1958,6 +1964,7 @@ def create_app():
                 ("peut_voir_archives", "BOOLEAN DEFAULT FALSE"),
                 ("est_spectateur", "BOOLEAN DEFAULT FALSE"),
                 ("peut_valider_fournisseur", "BOOLEAN DEFAULT FALSE"),
+                ("peut_imprimer_bdc", "BOOLEAN DEFAULT FALSE"),
                 ("mot_de_passe_clair", "VARCHAR(128)"),
             ]
             for col_nom, col_type in colonnes_permissions:
@@ -2088,18 +2095,32 @@ def create_app():
                     u.peut_annuler = True
                     u.peut_recuperer = True
                     u.peut_valider_fournisseur = True
+                    u.peut_imprimer_bdc = True
                 elif u_data.get('dta'):
                     u.peut_creer_bdc = True
                     u.peut_annuler = True
                     u.peut_gerer_stock = True
                     u.peut_recuperer = True
+                    u.peut_imprimer_bdc = True
                 elif u_data.get('mag'):
                     u.peut_creer_bdc = True
                     u.peut_gerer_stock = True
+                    u.peut_imprimer_bdc = True
                 elif u_data.get('fournisseur'):
                     u.peut_valider_fournisseur = True
+                    u.peut_imprimer_bdc = False
                 elif u_data.get('trans'):
                     u.peut_recuperer = True
+                    u.peut_imprimer_bdc = False
+
+            # S'assurer que les utilisateurs DT et DTA existants ont l'impression activée
+            try:
+                dt_users = User.query.filter(User.role.in_(['DT', 'Directeur Technique', 'DTA', 'Directeur Technique Adjoint'])).all()
+                for dtu in dt_users:
+                    if not dtu.peut_imprimer_bdc:
+                        dtu.peut_imprimer_bdc = True
+            except Exception:
+                pass
 
             db.session.commit()
         except Exception as e:

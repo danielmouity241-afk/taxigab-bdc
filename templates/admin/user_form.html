@@ -197,6 +197,15 @@
                       <label class="form-check-label fw-semibold small" for="perm-arch">Accès Archives Mensuelles</label>
                     </div>
                   </div>
+                  <div class="col-md-6">
+                    <div class="form-check form-switch p-2 bg-white rounded border border-danger-subtle">
+                      <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_imprimer_bdc" id="perm-imprimer"
+                             {% if user and user.can_imprimer_bdc %}checked{% elif not user %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-danger small" for="perm-imprimer">
+                        <i class="bi bi-printer-fill me-1"></i>Validation impression des bons (PDF)
+                      </label>
+                    </div>
+                  </div>
                   <div class="col-12">
                     <div class="form-check form-switch p-2 bg-white rounded border border-warning-subtle">
                       <input class="form-check-input ms-0 me-2 perm-action" type="checkbox" name="peut_valider_fournisseur" id="perm-fournisseur"
@@ -305,10 +314,12 @@ function appliquerProfil(type) {
   const admin = document.getElementById('perm-admin');
   const hist = document.getElementById('perm-hist');
   const arch = document.getElementById('perm-arch');
+  const imprimer = document.getElementById('perm-imprimer');
 
   if (type === 'spectateur') {
     spectateur.checked = true;
     toggleSpectateur(true);
+    if (imprimer) imprimer.checked = true;
     if (!roleInput.value || roleInput.value === 'Magasinier' || roleInput.value === 'Directeur Technique (DT)') {
       roleInput.value = 'Directeur Général (DG)';
     }
@@ -324,6 +335,7 @@ function appliquerProfil(type) {
     admin.checked = true;
     if (hist) hist.checked = true;
     if (arch) arch.checked = true;
+    if (imprimer) imprimer.checked = true;
     if (!roleInput.value) roleInput.value = 'Directeur Technique (DT)';
   } else if (type === 'magasinier') {
     spectateur.checked = false;
@@ -337,6 +349,7 @@ function appliquerProfil(type) {
     admin.checked = false;
     if (hist) hist.checked = true;
     if (arch) arch.checked = false;
+    if (imprimer) imprimer.checked = true;
     if (!roleInput.value) roleInput.value = 'Magasinier';
   } else if (type === 'transporteur') {
     spectateur.checked = false;
@@ -350,6 +363,7 @@ function appliquerProfil(type) {
     admin.checked = false;
     if (hist) hist.checked = false;
     if (arch) arch.checked = false;
+    if (imprimer) imprimer.checked = false;
     if (!roleInput.value) roleInput.value = 'Transporteur / Chauffeur';
   } else if (type === 'fournisseur') {
     spectateur.checked = false;
@@ -363,6 +377,7 @@ function appliquerProfil(type) {
     admin.checked = false;
     if (hist) hist.checked = false;
     if (arch) arch.checked = false;
+    if (imprimer) imprimer.checked = false;
     const fourn = document.getElementById('perm-fournisseur');
     if (fourn) fourn.checked = true;
     roleInput.value = 'Fournisseur';
